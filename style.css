@@ -1,55 +1,145 @@
+/* ===== GLOBAL ===== */
 body {
-  background: #250242;
-  color: white;
-  font-family: Arial;
   margin: 0;
+  font-family: system-ui, Arial, sans-serif;
+  background: #0f1117;
+  color: #e6e6e6;
 }
 
+/* ===== HEADER ===== */
 .header {
   text-align: center;
-  padding: 20px;
+  padding: 25px 15px;
+  background: #11131a;
+  border-bottom: 1px solid #1f2230;
 }
 
-.header img {
-  width: 120px;
-  border-radius: 50%;
+.logo {
+  width: 90px;
+  height: 90px;
+  border-radius: 16px;
+  object-fit: cover;
 }
 
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #a0a0a0;
+}
+
+/* ===== NAV ===== */
+.nav {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  padding: 12px;
+  background: #0d0f15;
+  border-bottom: 1px solid #1f2230;
+  flex-wrap: wrap;
+}
+
+.nav a {
+  color: #7dd3fc;
+  text-decoration: none;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.nav a:hover {
+  background: #1b1f2a;
+}
+
+/* ===== CONTAINER ===== */
 .container {
-  text-align: center;
-  margin-top: 40px;
-}
-
-a {
-  display: block;
-  margin: 15px;
-  font-size: 18px;
-  color: rgb(89, 0, 255);
-  cursor: pointer;
-}
-
-.list {
-  padding: 20px;
-}
-
-.card {
-  background: #10052e;
+  max-width: 900px;
+  margin: auto;
   padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 10px;
 }
 
+/* ===== PANELS / CARDS ===== */
+.panel, .card {
+  background: #151824;
+  border: 1px solid #222638;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 12px;
+}
+
+/* ===== STAFF CARD STYLE ===== */
+.card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* avatar */
 .card img {
-  width: 50px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
+  object-fit: cover;
 }
 
+/* text */
+.card b {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* inputs */
 select, textarea {
   width: 100%;
-  margin-top: 5px;
+  margin-top: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #2a2f44;
+  background: #0f1117;
+  color: white;
+  font-size: 13px;
 }
 
+/* buttons */
 button {
-  margin: 20px;
-  padding: 10px 20px;
+  background: #5865f2;
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+button:hover {
+  background: #4752c4;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 600px) {
+
+  .logo {
+    width: 70px;
+    height: 70px;
+  }
+
+  .title {
+    font-size: 18px;
+  }
+
+  .container {
+    padding: 10px;
+  }
+
+  .card {
+    flex-direction: column;
+  }
+
+  .nav {
+    gap: 8px;
+  }
 }

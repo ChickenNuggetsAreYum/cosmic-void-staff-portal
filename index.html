@@ -1,20 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cosmic Void Staff Portal</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
+  <!-- HEADER -->
   <div class="header">
-    <img src="https://media.discordapp.net/attachments/1433974277350096947/1488346334300995655/CV_easter_icon_cc.png">
-    <h1>Cosmic Void Staff Portal</h1>
+    <img src="assets/logo.png" class="logo" alt="Cosmic Void Logo">
+    <div class="title">Cosmic Void</div>
+    <div class="subtitle">Staff Portal</div>
   </div>
 
-  <div class="menu">
-    <a href="ratings.html" id="ratingsLink">Monthly Ratings</a>
-    <a href="notes.html" id="notesLink">Staff Notes</a>
-    <a href="admin.html" id="adminLink">Admin Panel</a>
+  <!-- NAV -->
+  <div class="nav">
+    <a href="index.html">Home</a>
+    <a id="ratingsLink">Ratings</a>
+    <a id="notesLink">Notes</a>
+    <a id="adminLink">Admin</a>
+  </div>
+
+  <!-- MAIN -->
+  <div class="container">
+
+    <div class="panel">
+      <h2>Welcome</h2>
+      <p>
+        Staff evaluation system for Cosmic Void. Complete monthly ratings and leave structured feedback for leadership review.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>Status</h2>
+      <p id="statusText">Loading...</p>
+    </div>
+
   </div>
 
   <script src="app.js"></script>
