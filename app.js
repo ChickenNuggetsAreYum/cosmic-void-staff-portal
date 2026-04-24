@@ -22,14 +22,9 @@ async function post(action, data = {}) {
   return res.json();
 }
 
-// ---------------- AUTH (NO FLASH EVER) ----------------
+// ---------------- AUTH ----------------
 
 async function verify() {
-  if (!userId || !token) {
-    document.body.innerHTML = "❌ Missing credentials";
-    throw new Error();
-  }
-
   const res = await post("verifyUser", {
     discordId: userId,
     token
@@ -47,16 +42,16 @@ async function verify() {
   return res;
 }
 
-// ---------------- TAB SYSTEM ----------------
+// ---------------- TABS ----------------
 
 function setupTabs() {
-  document.querySelectorAll(".channel").forEach(tab => {
-    tab.onclick = () => {
-      document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
+  document.querySelectorAll(".channel").forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll(".tab").forEach(x => x.classList.add("hidden"));
       document.querySelectorAll(".channel").forEach(c => c.classList.remove("active"));
 
-      tab.classList.add("active");
-      document.getElementById(tab.dataset.tab).classList.remove("hidden");
+      t.classList.add("active");
+      document.getElementById(t.dataset.tab).classList.remove("hidden");
     };
   });
 }
@@ -70,7 +65,9 @@ async function loadRatings() {
   c.innerHTML = "";
 
   staffCache.forEach(s => {
-    if (!s.isActive || s.discordId === userId) return;
+    if (!s.isActive) return;
+
+    const isYou = s.discordId === userId;
 
     const div = document.createElement("div");
     div.className = "card";
@@ -78,39 +75,41 @@ async function loadRatings() {
     div.innerHTML = `
       <img src="${s.avatarURL}">
       <div style="flex:1">
-        <b>${s.name}</b>
+        <b>${s.name} ${isYou ? "(You)" : ""}</b>
 
-        <select data-id="${s.discordId}">
-          <option>Excels</option>
-          <option>On Par</option>
-          <option>Meets Standards</option>
-          <option>Below Par</option>
-          <option>Needs Work</option>
-          <option>N/A</option>
-        </select>
+        ${isYou ? `<div>📌 This is you!</div>` : `
+          <select data-id="${s.discordId}">
+            <option>Excels</option>
+            <option>On Par</option>
+            <option>Meets Standards</option>
+            <option>Below Par</option>
+            <option>Needs Work</option>
+            <option>N/A</option>
+          </select>
 
-        <textarea data-id="${s.discordId}" placeholder="Comment"></textarea>
+          <textarea data-id="${s.discordId}"></textarea>
+        `}
       </div>
     `;
 
     c.appendChild(div);
   });
 
-  document.querySelectorAll("select, textarea").forEach(el => {
-    el.onchange = saveRatings;
+  document.querySelectorAll("select, textarea").forEach(x => {
+    x.onchange = saveRatings;
   });
 }
 
 async function saveRatings() {
   const ratings = [];
 
-  document.querySelectorAll("select").forEach(sel => {
-    const id = sel.dataset.id;
+  document.querySelectorAll("select").forEach(s => {
+    const id = s.dataset.id;
     if (!id) return;
 
     ratings.push({
       targetId: id,
-      rating: sel.value,
+      rating: s.value,
       comment: document.querySelector(`textarea[data-id="${id}"]`)?.value || ""
     });
   });
@@ -123,46 +122,78 @@ async function saveRatings() {
   });
 }
 
-// ---------------- NOTES (WITH HISTORY) ----------------
+// ---------------- NOTES ----------------
 
 async function loadNotes() {
-  const notes = await post("getNotes", {
-    authorId: userId,
-    month: month()
+  const data = await post("getNotes", {
+    month: month(),
+    authorId: userId
   });
 
-  const c = document.getElementById("notesHistory");
+  const c = document.getElementById("staffNotes");
   c.innerHTML = "";
 
-  if (!notes.length) {
-    c.innerHTML = "<p>No notes this month.</p>";
-    return;
-  }
+  for (const targetId in data) {
+    const notes = data[targetId];
 
-  notes.forEach(n => {
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <b>${n.targetId}</b><br>
-      ${n.type === "positive" ? "👍" : "👎"}<br>
-      ${n.note}
+      <b>${targetId}</b><br>
+      ${notes.map(n => `• ${n.note}`).join("<br>")}
+    `;
+
+    c.appendChild(div);
+  }
+}
+
+// ---------------- ADMIN ----------------
+
+async function loadAdmin() {
+  const months = await post("getAvailableMonths");
+  const latest = months[0];
+
+  const data = await post("getAdminMonthData", {
+    month: latest
+  });
+
+  const staff = await post("getStaff");
+
+  const c = document.getElementById("adminPanel");
+  c.innerHTML = "";
+
+  staff.forEach(s => {
+    if (!s.isActive) return;
+
+    const r = data.ratings.filter(x => x.targetId === s.discordId);
+    const n = data.notes[s.discordId] || [];
+
+    const div = document.createElement("div");
+    div.className = "card";
+
+    div.innerHTML = `
+      <img src="${s.avatarURL}">
+      <div style="flex:1">
+        <b>${s.name}</b><br>
+        Rating: ${r[0]?.rating || "N/A"}<br><br>
+
+        Notes:<br>
+        ${n.map(x => `• ${x.note}`).join("<br>") || "None"}
+      </div>
     `;
 
     c.appendChild(div);
   });
 }
 
-// ---------------- INIT (ORDER FIX = NO LOADING BUGS) ----------------
+// ---------------- INIT ----------------
 
 (async () => {
   await verify();
-
   setupTabs();
 
   await loadRatings();
   await loadNotes();
-
-  document.getElementById("loadingScreen").style.display = "none";
-  document.getElementById("app").classList.remove("hidden");
+  await loadAdmin();
 })();
