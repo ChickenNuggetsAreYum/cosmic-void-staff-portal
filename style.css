@@ -57,3 +57,40 @@ select,textarea{
   width:100%;
   margin-top:5px;
 }
+.card{
+  background:#2b2d31;
+  color:white;
+  border-radius:10px;
+  padding:12px;
+  margin:10px 0;
+}
+
+.avatar{
+  width:40px;
+  height:40px;
+  border-radius:50%;
+}
+
+.rating-box select,
+.rating-box textarea{
+  background:#1e1f22;
+  color:white;
+  border:none;
+  padding:8px;
+  border-radius:6px;
+  margin-top:6px;
+  width:100%;
+}
+
+.you-overlay{
+  background:#111;
+  color:#aaa;
+  padding:8px;
+  border-radius:6px;
+  margin-top:8px;
+  text-align:center;
+}
+
+.tab.hidden{
+  display:none;
+}

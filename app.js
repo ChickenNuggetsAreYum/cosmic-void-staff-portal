@@ -1,113 +1,133 @@
 const API = "https://remoteworker23.jeoliver1fan.workers.dev/";
 
-const params=new URLSearchParams(location.search);
-const userId=params.get("id");
-const token=params.get("token");
+const params = new URLSearchParams(window.location.search);
+const userId = params.get("id");
+const token = params.get("token");
 
 function month(){
   return new Date().toISOString().slice(0,7);
 }
 
-async function post(a,d={}){
-  const r=await fetch(API,{
+// ---------------- API ----------------
+
+async function post(action,data={}){
+  const res = await fetch(API,{
     method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({action:a,...d})
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({action,...data})
   });
-  return r.json();
+
+  return res.json();
 }
 
-let me=null;
+// ---------------- AUTH ----------------
+
 let isAdmin=false;
+let staffCache=[];
 
-(async()=>{
+async function verify(){
+  const res = await post("verifyUser",{discordId:userId,token});
 
-  const v=await post("verifyUser",{discordId:userId,token});
-
-  if(!v.valid){
-    document.body.innerHTML="Unauthorized";
-    return;
+  if(!res.valid){
+    document.body.innerHTML="❌ Unauthorized";
+    throw new Error();
   }
 
-  me=v;
-  isAdmin=v.isWebAdmin;
+  isAdmin = res.isWebAdmin;
 
-  if(!isAdmin)
-    document.querySelector('[data-tab="admin"]').style.display="none";
+  const adminTab = document.getElementById("adminTab");
+  if(adminTab) adminTab.style.display = isAdmin ? "block" : "none";
+}
 
-  document.getElementById("loading").style.display="none";
-  document.getElementById("app").classList.remove("hidden");
-
-  setupTabs();
-  loadRatings();
-  loadAdmin();
-
-})();
-
-// ---------------- TABS ----------------
+// ---------------- TABS (FIXED START TAB) ----------------
 
 function setupTabs(){
-  document.querySelectorAll(".channel").forEach(t=>{
-    t.onclick=()=>{
-      document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));
-      document.getElementById(t.dataset.tab).classList.remove("hidden");
-    };
+
+  const tabs=document.querySelectorAll(".channel");
+  const pages=document.querySelectorAll(".tab");
+
+  function open(tabName){
+
+    pages.forEach(p=>p.classList.add("hidden"));
+    tabs.forEach(t=>t.classList.remove("active"));
+
+    const tabBtn = document.querySelector(`[data-tab="${tabName}"]`);
+    const page = document.getElementById(tabName);
+
+    if(tabBtn) tabBtn.classList.add("active");
+    if(page) page.classList.remove("hidden");
+  }
+
+  tabs.forEach(tab=>{
+    tab.addEventListener("click",()=>{
+      open(tab.dataset.tab);
+    });
   });
+
+  // 🔥 FORCE START ON RATINGS
+  open("ratings");
 }
 
 // ---------------- RATINGS ----------------
 
 async function loadRatings(){
 
-  const staff=await post("getStaff");
-  const saved=await post("getRatings",{month:month()});
+  const box=document.getElementById("staffRatings");
+  if(!box) return;
 
-  const box=document.getElementById("ratings");
+  const staff = await post("getStaff");
+  staffCache = staff;
+
+  const existing = await post("getRatings",{month:month()});
+
   box.innerHTML="";
 
   staff.forEach(s=>{
 
-    const my=saved.find(r=>
-      r.targetId===s.discordId &&
-      r.reviewerId===userId
-    );
+    if(!s.isActive) return;
 
-    const isYou=s.discordId===userId;
+    const isYou = s.discordId === userId;
 
-    box.innerHTML+=`
-      <div class="card">
-        <img src="${s.avatarURL}" class="pfp">
+    const my = existing.find(e=>e.targetId===s.discordId);
 
-        <div>
-          <b>${s.name}</b>
-          ${isYou?`<span class="you">This is you!</span>`:""}
+    const div=document.createElement("div");
+    div.className="card";
+
+    div.innerHTML=`
+      <img src="${s.avatarURL||''}" class="avatar">
+      <b>${s.name}</b>
+
+      ${isYou ? `
+        <div class="you-overlay">This is you!</div>
+      ` : `
+        <div class="rating-box">
+          <select data-id="${s.discordId}">
+            ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
+              .map(v=>`<option ${my?.rating===v?"selected":""}>${v}</option>`).join("")}
+          </select>
+
+          <textarea data-id="${s.discordId}">${my?.comment||""}</textarea>
         </div>
-
-        <select data-id="${s.discordId}">
-          ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
-          .map(v=>`
-            <option ${my?.rating===v?"selected":""}>${v}</option>
-          `).join("")}
-        </select>
-
-        <textarea data-id="${s.discordId}">${my?.comment||""}</textarea>
-      </div>
+      `}
     `;
+
+    box.appendChild(div);
   });
 
   document.querySelectorAll("select,textarea").forEach(el=>{
-    el.onchange=saveRatings;
+    el.addEventListener("change",saveRatings);
   });
 }
-
-// ---------------- SAVE ----------------
 
 async function saveRatings(){
 
   const ratings=[];
 
   document.querySelectorAll("select").forEach(sel=>{
+
     const id=sel.dataset.id;
+    if(!id || id===userId) return;
+
     const comment=document.querySelector(`textarea[data-id="${id}"]`)?.value||"";
 
     if(sel.value==="N/A") return;
@@ -120,25 +140,134 @@ async function saveRatings(){
   });
 
   await post("saveRatings",{
-    month:month(),
     reviewerId:userId,
+    token,
+    month:month(),
     ratings
   });
 }
 
-// ---------------- ADMIN ----------------
+// ---------------- NOTES (FIXED VISUAL + STRUCTURE) ----------------
+
+async function loadNotes(){
+
+  const box=document.getElementById("staffNotes");
+  if(!box) return;
+
+  const staff=await post("getStaff");
+  const notes=await post("getNotes",{month:month()});
+
+  box.innerHTML="";
+
+  staff.forEach(s=>{
+
+    const isYou=s.discordId===userId;
+    const list=notes[s.discordId]||[];
+
+    const div=document.createElement("div");
+    div.className="card notes-card";
+
+    div.innerHTML=`
+      <img src="${s.avatarURL||''}" class="avatar">
+      <b>${s.name}</b>
+
+      <div class="note-list">
+        ${list.length
+          ? list.map(n=>`
+              <div class="note ${n.type}">
+                ${n.type==="positive"?"👍":"👎"} ${n.note}
+              </div>
+            `).join("")
+          : "<i>No notes</i>"
+        }
+      </div>
+
+      ${isYou ? `<div class="you-overlay">This is you!</div>` : `
+        <textarea data-id="${s.discordId}" placeholder="Add note..."></textarea>
+        <button onclick="addNote('${s.discordId}','positive')">👍</button>
+        <button onclick="addNote('${s.discordId}','negative')">👎</button>
+      `}
+    `;
+
+    box.appendChild(div);
+  });
+}
+
+async function addNote(id,type){
+
+  const input=document.querySelector(`textarea[data-id="${id}"]`);
+  const text=input?.value;
+
+  if(!text || !text.trim()) return;
+
+  await post("saveNote",{
+    month:month(),
+    authorId:userId,
+    token,
+    targetId:id,
+    type,
+    note:text
+  });
+
+  loadNotes();
+}
+
+// ---------------- ADMIN (FIXED ACCURACY) ----------------
 
 async function loadAdmin(){
 
-  const box=document.getElementById("admin");
+  const box=document.getElementById("adminPanel");
+  if(!box) return;
 
-  const data=await post("getDashboard",{month:month()});
+  const ratings=await post("getRatings",{month:month()});
+  const staff=staffCache.length?staffCache:await post("getStaff");
 
-  box.innerHTML=data.map(s=>`
-    <div class="card">
-      <img src="${s.avatarURL}" class="pfp">
+  let map={};
+
+  staff.forEach(s=>{
+    map[s.discordId]={
+      name:s.name,
+      avatarURL:s.avatarURL,
+      count:0
+    };
+  });
+
+  ratings.forEach(r=>{
+    if(map[r.targetId]){
+      map[r.targetId].count++;
+    }
+  });
+
+  box.innerHTML="";
+
+  Object.values(map).forEach(s=>{
+    const div=document.createElement("div");
+    div.className="card";
+
+    div.innerHTML=`
+      <img src="${s.avatarURL||''}" class="avatar">
       <b>${s.name}</b>
-      <div>Ratings: ${s.ratings}</div>
-    </div>
-  `).join("");
+      <div>Ratings: ${s.count}</div>
+    `;
+
+    box.appendChild(div);
+  });
 }
+
+// ---------------- INIT ----------------
+
+(async()=>{
+  try{
+
+    await verify();
+    setupTabs();
+
+    await loadRatings();
+    await loadNotes();
+    await loadAdmin();
+
+  }catch(e){
+    console.error(e);
+    document.body.innerHTML="❌ Failed to load";
+  }
+})();
