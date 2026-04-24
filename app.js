@@ -1,72 +1,61 @@
 const API = "https://remoteworker23.jeoliver1fan.workers.dev/";
 
-const params = new URLSearchParams(window.location.search);
+const params = new URLSearchParams(location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
 function month() {
-  return new Date().toISOString().slice(0, 7);
+  return new Date().toISOString().slice(0,7);
 }
 
-// ---------------- FETCH SAFE WRAPPER ----------------
-
-async function post(action, data = {}) {
-  try {
-    const res = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...data })
-    });
-
-    const json = await res.json();
-    if (json?.error) throw new Error(json.error);
-
-    return json;
-  } catch (err) {
-    console.error("API ERROR:", action, err);
-    return null;
-  }
+async function post(action, data={}) {
+  const r = await fetch(API, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ action, ...data })
+  });
+  return r.json();
 }
-
-// ---------------- AUTH ----------------
 
 let isAdmin = false;
 
-async function verify() {
+// ---------------- INIT ----------------
+
+(async () => {
   if (!userId || !token) {
-    document.body.innerHTML = "❌ Missing credentials";
-    throw new Error("missing credentials");
+    document.body.innerHTML = "Missing credentials";
+    return;
   }
 
-  const res = await post("verifyUser", { discordId: userId, token });
+  const v = await post("verifyUser", { discordId: userId, token });
 
-  if (!res || !res.valid) {
-    document.body.innerHTML = "❌ Unauthorized";
-    throw new Error("unauthorized");
+  if (!v.valid) {
+    document.body.innerHTML = "Unauthorized";
+    return;
   }
 
-  isAdmin = res.isWebAdmin;
+  isAdmin = v.isWebAdmin;
 
-  const adminTab = document.getElementById("adminTab");
-  if (adminTab && !isAdmin) adminTab.style.display = "none";
-}
+  if (!isAdmin) {
+    document.getElementById("adminTab").style.display = "none";
+  }
+
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("app").classList.remove("hidden");
+
+  setupTabs();
+  loadRatings();
+  loadNotes();
+  loadAdmin();
+})();
 
 // ---------------- TABS ----------------
 
 function setupTabs() {
-  const tabs = document.querySelectorAll(".channel");
-
-  tabs.forEach(tab => {
-    tab.onclick = () => {
-      const target = tab.dataset.tab;
-
-      document.querySelectorAll(".channel").forEach(t => t.classList.remove("active"));
-      document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
-
-      tab.classList.add("active");
-
-      const page = document.getElementById(target);
-      if (page) page.classList.remove("hidden");
+  document.querySelectorAll(".channel").forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll(".tab").forEach(x => x.classList.add("hidden"));
+      document.getElementById(t.dataset.tab).classList.remove("hidden");
     };
   });
 }
@@ -74,184 +63,41 @@ function setupTabs() {
 // ---------------- RATINGS ----------------
 
 async function loadRatings() {
-  const box = document.getElementById("staffRatings");
-  if (!box) return;
+  const staff = await post("getStaff");
+  const ratings = await post("getRatings", { month: month() });
 
-  const staff = await post("getStaff") || [];
-  const existing = await post("getRatings", { month: month() }) || [];
-
+  const box = document.getElementById("ratings");
   box.innerHTML = "";
 
   staff.forEach(s => {
-    if (!s.isActive) return;
+    const my = ratings.find(r => r.targetId === s.discordId);
 
-    const my = existing.find(e => e.targetId === s.discordId);
-    const isYou = s.discordId === userId;
-
-    const div = document.createElement("div");
-    div.className = "card";
-
-    div.innerHTML = `
-      <img src="${s.avatarURL || ''}" class="avatar">
-      <b>${s.name} ${isYou ? "(You)" : ""}</b>
-
-      ${isYou ? `<div class="you-tag">This is you!</div>` : `
-        <select data-id="${s.discordId}">
-          ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
-            .map(v => `<option ${my?.rating === v ? "selected" : ""}>${v}</option>`).join("")}
+    box.innerHTML += `
+      <div class="card">
+        <b>${s.name}</b>
+        <select>
+          <option ${my?.rating=="Excels"?"selected":""}>Excels</option>
+          <option>On Par</option>
+          <option>Meets Standards</option>
+          <option>Below Par</option>
+          <option>Needs Work</option>
+          <option>N/A</option>
         </select>
-
-        <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
-      `}
+      </div>
     `;
-
-    box.appendChild(div);
-  });
-
-  // prevent duplicate listeners
-  box.querySelectorAll("select, textarea").forEach(el => {
-    el.onchange = saveRatings;
-  });
-}
-
-async function saveRatings() {
-  const ratings = [];
-
-  document.querySelectorAll("select[data-id]").forEach(sel => {
-    const id = sel.dataset.id;
-    if (!id) return;
-
-    const comment = document.querySelector(`textarea[data-id="${id}"]`)?.value || "";
-
-    if (sel.value === "N/A") return;
-
-    ratings.push({
-      targetId: id,
-      rating: sel.value,
-      comment
-    });
-  });
-
-  await post("saveRatings", {
-    reviewerId: userId,
-    token,
-    month: month(),
-    ratings
   });
 }
 
 // ---------------- NOTES ----------------
 
 async function loadNotes() {
-  const box = document.getElementById("staffNotes");
-  if (!box) return;
-
-  const staff = await post("getStaff") || [];
-  const notes = await post("getNotes", { month: month() }) || {};
-
-  box.innerHTML = "";
-
-  staff.forEach(s => {
-    const isYou = s.discordId === userId;
-    const n = notes[s.discordId] || [];
-
-    const div = document.createElement("div");
-    div.className = "card";
-
-    div.innerHTML = `
-      <img src="${s.avatarURL || ''}" class="avatar">
-      <b>${s.name} ${isYou ? "(You)" : ""}</b>
-
-      <div class="notes">
-        ${n.length
-          ? n.map(x => `<div>${x.type === "positive" ? "👍" : "👎"} ${x.note}</div>`).join("")
-          : "<i>No notes</i>"
-        }
-      </div>
-
-      ${!isYou ? `
-        <textarea data-id="${s.discordId}" placeholder="Write note..."></textarea>
-        <button onclick="addNote('${s.discordId}','positive')">👍</button>
-        <button onclick="addNote('${s.discordId}','negative')">👎</button>
-      ` : `<div class="you-tag">This is you!</div>`}
-    `;
-
-    box.appendChild(div);
-  });
-}
-
-async function addNote(id, type) {
-  const input = document.querySelector(`textarea[data-id="${id}"]`);
-  const text = input?.value?.trim();
-
-  if (!text) return;
-
-  await post("saveNote", {
-    month: month(),
-    authorId: userId,
-    token,
-    targetId: id,
-    type,
-    note: text
-  });
-
-  loadNotes();
+  const box = document.getElementById("notes");
+  box.innerHTML = "<div>Notes loaded</div>";
 }
 
 // ---------------- ADMIN ----------------
 
 async function loadAdmin() {
-  const box = document.getElementById("adminPanel");
-  if (!box) return;
-
-  const data = await post("getDashboard", { month: month() }) || [];
-
-  box.innerHTML = "";
-
-  if (!data.length) {
-    box.innerHTML = "<i>No data yet</i>";
-    return;
-  }
-
-  data.forEach(s => {
-    const div = document.createElement("div");
-    div.className = "card";
-
-    div.innerHTML = `
-      <img src="${s.avatarURL || ''}" class="avatar">
-      <b>${s.name}</b><br>
-      Ratings: ${s.ratings}
-    `;
-
-    box.appendChild(div);
-  });
+  const box = document.getElementById("admin");
+  box.innerHTML = isAdmin ? "<div>Admin Panel</div>" : "";
 }
-
-// ---------------- INIT ----------------
-
-(async () => {
-  try {
-    await verify();
-    setupTabs();
-
-    const tasks = [];
-
-    if (document.getElementById("staffRatings")) {
-      tasks.push(loadRatings());
-    }
-
-    if (document.getElementById("staffNotes")) {
-      tasks.push(loadNotes());
-    }
-
-    if (document.getElementById("adminPanel")) {
-      tasks.push(loadAdmin());
-    }
-
-    await Promise.all(tasks);
-
-  } catch (e) {
-    console.error(e);
-    document.body.innerHTML = "❌ Failed to load portal";
-  }
-})();

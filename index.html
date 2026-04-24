@@ -1,48 +1,26 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>Cosmic Void Staff</title>
   <link rel="stylesheet" href="style.css">
 </head>
+<body>
 
-<body class="app">
+<div id="loading">Loading Cosmic Void Staff Portal...</div>
 
-<!-- LOADING SCREEN (BLOCKS EVERYTHING) -->
-<div id="loadingScreen">
-  <div class="loader">Loading Cosmic Void Staff Portal...</div>
-</div>
+<div id="app" class="hidden">
 
-<!-- APP (HIDDEN UNTIL READY) -->
-<div id="app" class="layout hidden">
-
-  <!-- SIDEBAR -->
   <div class="sidebar">
-    <div class="title">Cosmic Void Staff</div>
-
     <div class="channel active" data-tab="ratings"># ratings</div>
     <div class="channel" data-tab="notes"># notes</div>
     <div class="channel" id="adminTab" data-tab="admin"># admin</div>
   </div>
 
-  <!-- MAIN -->
   <div class="main">
 
-    <!-- RATINGS -->
-    <div id="ratings" class="tab">
-      <h2>Monthly Ratings</h2>
-      <div id="staffRatings"></div>
-    </div>
-
-    <!-- NOTES (NOW SHOWS HISTORY) -->
-    <div id="notes" class="tab hidden">
-      <h2>Your Notes (This Month)</h2>
-      <div id="notesHistory"></div>
-    </div>
-
-    <!-- ADMIN -->
-    <div id="admin" class="tab hidden">
-      <h2>Admin Panel</h2>
-      <div id="adminPanel"></div>
-    </div>
+    <div id="ratings" class="tab"></div>
+    <div id="notes" class="tab hidden"></div>
+    <div id="admin" class="tab hidden"></div>
 
   </div>
 
