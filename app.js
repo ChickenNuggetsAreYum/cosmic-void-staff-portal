@@ -72,7 +72,11 @@ async function loadReviews() {
   }
 
   if (!RATINGS_CACHE) {
-    RATINGS_CACHE = await post("getRatings", { month: month() });
+    RATINGS_CACHE = await post("getRatings", {
+      month: month(),
+      reviewerId: userId,
+      token
+    });
   }
 
   if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
@@ -91,7 +95,9 @@ async function loadReviews() {
 
     const my = RATINGS_CACHE.find(e =>
       String(e.targetId) === String(s.discordId)
+      && (String(e.reviewerId) === String(userId) || e.reviewerId == null)
     );
+    const selectedRating = my?.rating?.toString().trim().toLowerCase();
 
     const div = document.createElement("div");
     div.className = "card";
@@ -106,9 +112,10 @@ async function loadReviews() {
         ` : `
           <select data-id="${s.discordId}">
             ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
-              .map(v => `
-                <option ${my?.rating === v ? "selected" : ""}>${v}</option>
-              `).join("")}
+              .map(v => {
+                const normalized = v.toLowerCase();
+                return `<option value="${v}" ${selectedRating === normalized ? "selected" : ""}>${v}</option>`;
+              }).join("")}
           </select>
 
           <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
