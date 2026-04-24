@@ -12,6 +12,7 @@ function month() {
 
 let STAFF_CACHE = null;
 let RATINGS_CACHE = null;
+let NOTES_CACHE = null;
 let RATINGS_MONTH = null;
 let USER = null;
 
@@ -171,7 +172,7 @@ async function loadReviews() {
 
     const isYou = String(s.discordId) === String(userId);
     const my = ratingMap[`${String(s.discordId).trim()}|${String(userId).trim()}`];
-    const selectedRating = my?.rating?.toString().trim().toLowerCase();
+    const selectedRating = my?.rating?.toString().trim().toLowerCase() || "n/a";
 
     const div = document.createElement("div");
     div.className = "card";
@@ -179,11 +180,11 @@ async function loadReviews() {
     div.innerHTML = `
       <img src="${s.avatarURL || ''}">
       <div>
-        <b>${s.name}</b>
-
         ${isYou ? `
+          <b>${s.name}</b>
           <p style="opacity:0.6;">This is you</p>
         ` : `
+          <button class="staff-link" data-id="${s.discordId}">${s.name}</button>
           <select data-id="${s.discordId}">
             ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
               .map(v => {
@@ -200,8 +201,139 @@ async function loadReviews() {
     box.appendChild(div);
   });
 
-  document.querySelectorAll("select, textarea")
+  document.querySelectorAll("#reviewsBox select, #reviewsBox textarea")
     .forEach(el => el.addEventListener("change", saveReviews));
+
+  document.querySelectorAll(".staff-link").forEach(el => {
+    el.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await openStaffDetails(el.dataset.id, { adminView: false, tab: "Notes" });
+    });
+  });
+}
+
+async function getNotesForTarget(targetId, monthValue = month()) {
+  const notes = await post("getNotes", { month: monthValue, targetId });
+  return Array.isArray(notes) ? notes : [];
+}
+
+function renderRatingList(staff, ratings, adminView) {
+  if (!ratings.length) {
+    return `<div class="card"><p>No ratings found for ${staff.name} this month.</p></div>`;
+  }
+
+  const reviewerMap = STAFF_CACHE.reduce((map, s) => {
+    map[String(s.discordId).trim()] = s.name;
+    return map;
+  }, {});
+
+  if (adminView) {
+    return ratings.map(r => {
+      const reviewer = reviewerMap[String(r.reviewerId).trim()] || String(r.reviewerId).trim();
+      return `
+        <div class="review-card">
+          <b>${reviewer}</b>
+          <small>Rating: ${r.rating}</small>
+          <p>${String(r.comment || "").trim() || "No comment."}</p>
+        </div>
+      `;
+    }).join("");
+  }
+
+  const myRating = ratings.find(r => String(r.reviewerId).trim() === String(userId).trim());
+  if (!myRating) {
+    return `<div class="card"><p>You haven't rated ${staff.name} yet.</p></div>`;
+  }
+
+  return `
+    <div class="review-card">
+      <b>Your rating</b>
+      <small>Rating: ${myRating.rating}</small>
+      <p>${String(myRating.comment || "").trim() || "No comment."}</p>
+    </div>
+  `;
+}
+
+async function saveNote(targetId, adminView = false) {
+  const noteInput = document.getElementById("detailsNoteInput");
+  if (!noteInput) return;
+
+  await post("saveNotes", {
+    month: month(),
+    reviewerId: userId,
+    targetId,
+    note: noteInput.value.trim()
+  });
+
+  if (adminView) {
+    await openAdminStaffDetails(targetId);
+  } else {
+    await openStaffDetails(targetId, { adminView: false, tab: "Notes" });
+  }
+}
+
+async function openStaffDetails(targetId, { adminView = false, tab = "Notes" } = {}) {
+  const staff = STAFF_CACHE?.find(s => String(s.discordId).trim() === String(targetId).trim());
+  if (!staff) return;
+
+  const ratings = (RATINGS_CACHE || []).filter(r => String(r.targetId).trim() === String(targetId).trim());
+  const notes = await getNotesForTarget(targetId);
+
+  renderDetailsPanel(staff, { ratings, notes, activeTab: tab, adminView });
+}
+
+function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminView = false }) {
+  const panel = document.getElementById(adminView ? "adminDetail" : "detailsPanel");
+  if (!panel) return;
+  panel.classList.remove("hidden");
+
+  const noteEntry = notes.find(n => String(n.reviewerId).trim() === String(userId).trim());
+  const noteText = noteEntry?.note || "";
+
+  panel.innerHTML = `
+    <div class="details-panel">
+      <div class="details-tabs">
+        <button type="button" class="details-tab-button ${activeTab === "Ratings" ? "active" : ""}" data-tab="Ratings">Ratings</button>
+        <button type="button" class="details-tab-button ${activeTab === "Notes" ? "active" : ""}" data-tab="Notes">Notes</button>
+      </div>
+
+      <div id="detailsContent">
+        ${activeTab === "Ratings" ? `
+          ${renderRatingList(staff, ratings, adminView)}
+        ` : `
+          <div>
+            <label for="detailsNoteInput"><b>${adminView ? "Add or update a note" : "Your note"}</b></label>
+            <textarea id="detailsNoteInput" rows="5">${noteText}</textarea>
+            <button id="saveDetailsNote">Save Note</button>
+
+            <div style="margin-top:20px;">
+              <b>Existing notes</b>
+              ${notes.length ? notes.map(note => {
+                const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(note.reviewerId).trim());
+                return `
+                  <div class="note-item">
+                    <small>${reviewer?.name || note.reviewerId}</small>
+                    <p>${String(note.note || "").trim() || "No note."}</p>
+                  </div>
+                `;
+              }).join("") : "<div class='card'>No notes yet.</div>"}
+            </div>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+
+  panel.querySelectorAll(".details-tab-button").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const nextTab = btn.dataset.tab;
+      renderDetailsPanel(staff, { ratings, notes, activeTab: nextTab, adminView });
+    });
+  });
+
+  panel.querySelector("#saveDetailsNote")?.addEventListener("click", async () => {
+    await saveNote(staff.discordId, adminView);
+  });
 }
 
 async function loadAdmin() {
@@ -215,62 +347,49 @@ async function loadAdmin() {
 
   const monthValue = document.getElementById("adminMonthSelect")?.value || month();
   const ratings = await post("getRatings", { month: monthValue });
-
-  const statsBox = document.getElementById("adminStats");
-  const reviewsBox = document.getElementById("adminReviews");
+  const listBox = document.getElementById("adminList");
+  const detailBox = document.getElementById("adminDetail");
 
   if (!Array.isArray(STAFF_CACHE) || !Array.isArray(ratings)) {
-    if (statsBox) statsBox.innerHTML = "<div class='card'>❌ Failed to load admin data</div>";
-    if (reviewsBox) reviewsBox.innerHTML = "";
+    if (listBox) listBox.innerHTML = "<div class='card'>❌ Failed to load admin data</div>";
+    if (detailBox) detailBox.classList.add("hidden");
     return;
   }
 
-  const numeric = {
-    Excels: 5,
-    "On Par": 4,
-    "Meets Standards": 3,
-    "Below Par": 2,
-    "Needs Work": 1
-  };
+  const staffRows = STAFF_CACHE.filter(s => s.isActive === true);
 
-  const reviewerMap = STAFF_CACHE.reduce((map, s) => {
-    map[String(s.discordId).trim()] = s.name;
-    return map;
-  }, {});
-
-  const stats = STAFF_CACHE.map(s => {
-    const teamRatings = ratings.filter(r => String(r.targetId).trim() === String(s.discordId).trim());
-    const count = teamRatings.length;
-    const average = count ? (teamRatings.reduce((sum, r) => sum + (numeric[r.rating] || 0), 0) / count).toFixed(2) : null;
-    const comments = teamRatings.filter(r => String(r.comment ?? "").trim()).length;
-    return { staff: s, count, average, comments, ratings: teamRatings };
-  });
-
-  if (statsBox) {
-    statsBox.innerHTML = stats.map(stat => `
-      <div class="stat-card">
-        <b>${stat.staff.name}</b>
-        <span>Reviews: ${stat.count}</span>
-        <span>Average: ${stat.average ?? "N/A"}</span>
-        <span>Comments: ${stat.comments}</span>
-      </div>
-    `).join("");
-  }
-
-  if (reviewsBox) {
-    reviewsBox.innerHTML = ratings.length ? ratings.map(r => {
-      const target = STAFF_CACHE.find(s => String(s.discordId).trim() === String(r.targetId).trim());
-      const targetName = target ? target.name : String(r.targetId).trim();
-      const reviewerName = reviewerMap[String(r.reviewerId).trim()] || String(r.reviewerId).trim();
+  if (listBox) {
+    listBox.innerHTML = staffRows.length ? staffRows.map(s => {
+      const count = ratings.filter(r => String(r.targetId).trim() === String(s.discordId).trim()).length;
       return `
-        <div class="review-card">
-          <b>${targetName}</b>
-          <small>Reviewer: ${reviewerName} · Rating: ${r.rating}</small>
-          <p>${String(r.comment || "").trim() || "No comment."}</p>
+        <div class="staff-card" data-id="${s.discordId}">
+          <b>${s.name}</b>
+          <p>Ratings: ${count}</p>
         </div>
       `;
-    }).join("") : "<div class='card'>No ratings found for this month.</div>";
+    }).join("") : "<div class='card'>No active staff found.</div>";
   }
+
+  if (detailBox) {
+    detailBox.classList.add("hidden");
+    detailBox.innerHTML = "";
+  }
+
+  document.querySelectorAll(".staff-card").forEach(card => {
+    card.addEventListener("click", async () => {
+      await openAdminStaffDetails(card.dataset.id, monthValue);
+    });
+  });
+}
+
+async function openAdminStaffDetails(targetId, monthValue = month()) {
+  const staff = STAFF_CACHE?.find(s => String(s.discordId).trim() === String(targetId).trim());
+  if (!staff) return;
+
+  const ratings = (await post("getRatings", { month: monthValue }))?.filter(r => String(r.targetId).trim() === String(targetId).trim()) || [];
+  const notes = await getNotesForTarget(targetId, monthValue);
+
+  renderDetailsPanel(staff, { ratings, notes, activeTab: "Ratings", adminView: true });
 }
 
 // ---------------- SAVE ----------------
