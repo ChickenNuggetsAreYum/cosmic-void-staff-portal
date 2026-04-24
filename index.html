@@ -17,6 +17,7 @@
 
   <div class="menu">
     <a href="#" data-page="reviews">Reviews</a>
+    <a href="#" data-page="admin" class="hidden">Admin</a>
   </div>
 
   <div class="container">
@@ -29,6 +30,19 @@
 
       <div id="reviewsBox"></div>
 
+    </div>
+
+    <div id="adminPage" class="hidden">
+      <h2 class="center-title">Admin Ratings Dashboard</h2>
+
+      <div class="admin-controls">
+        <label for="adminMonthSelect">Month</label>
+        <select id="adminMonthSelect"></select>
+        <button id="adminReload">Load Month</button>
+      </div>
+
+      <div id="adminStats"></div>
+      <div id="adminReviews"></div>
     </div>
 
   </div>

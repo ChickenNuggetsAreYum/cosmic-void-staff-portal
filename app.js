@@ -12,6 +12,8 @@ function month() {
 
 let STAFF_CACHE = null;
 let RATINGS_CACHE = null;
+let RATINGS_MONTH = null;
+let USER = null;
 
 // ---------------- API ----------------
 
@@ -44,12 +46,15 @@ async function verify() {
     document.body.innerHTML = "❌ Unauthorized";
     throw new Error("Unauthorized");
   }
+
+  USER = res;
 }
 
 // ---------------- NAV ----------------
 
 function setupNav() {
   const reviewsTab = document.querySelector("[data-page='reviews']");
+  const adminTab = document.querySelector("[data-page='admin']");
 
   if (reviewsTab) {
     reviewsTab.addEventListener("click", async (e) => {
@@ -57,6 +62,48 @@ function setupNav() {
       await loadReviews();
     });
   }
+
+  if (adminTab) {
+    adminTab.addEventListener("click", async (e) => {
+      e.preventDefault();
+      await loadAdmin();
+    });
+
+    if (USER?.isWebAdmin) {
+      adminTab.classList.remove("hidden");
+    }
+  }
+
+  initAdminControls();
+}
+
+function setActivePage(page) {
+  document.querySelectorAll("[data-page]").forEach(el => {
+    el.classList.toggle("active", el.dataset.page === page);
+  });
+
+  const reviewsPage = document.getElementById("reviewsPage");
+  const adminPage = document.getElementById("adminPage");
+
+  if (reviewsPage) reviewsPage.classList.toggle("hidden", page !== "reviews");
+  if (adminPage) adminPage.classList.toggle("hidden", page !== "admin");
+}
+
+function initAdminControls() {
+  const select = document.getElementById("adminMonthSelect");
+  const reload = document.getElementById("adminReload");
+  if (!select || !reload) return;
+
+  const values = [];
+  const current = new Date();
+  for (let i = 0; i < 12; i += 1) {
+    const date = new Date(current.getFullYear(), current.getMonth() - i, 1);
+    values.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  select.innerHTML = values.map(month => `<option value="${month}">${month}</option>`).join("");
+  select.value = month();
+  reload.addEventListener("click", loadAdmin);
 }
 
 // ---------------- LOAD REVIEWS ----------------
@@ -66,13 +113,19 @@ async function loadReviews() {
   const spinner = document.getElementById("loadingSpinner");
   if (!box) return;
 
+  const currentMonth = month();
+  if (RATINGS_MONTH !== currentMonth) {
+    RATINGS_CACHE = null;
+    RATINGS_MONTH = currentMonth;
+  }
+
   // fetch once only
   if (!STAFF_CACHE) {
     STAFF_CACHE = await post("getStaff");
   }
 
   if (!RATINGS_CACHE) {
-    RATINGS_CACHE = await post("getRatings", { month: month() });
+    RATINGS_CACHE = await post("getRatings", { month: currentMonth });
   }
 
   if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
@@ -83,6 +136,7 @@ async function loadReviews() {
 
   if (spinner) spinner.style.display = "none";
   box.innerHTML = "";
+  setActivePage("reviews");
 
   const ratingMap = RATINGS_CACHE.reduce((map, row) => {
     const targetId = String(row.targetId ?? "").trim();
@@ -129,6 +183,69 @@ async function loadReviews() {
 
   document.querySelectorAll("select, textarea")
     .forEach(el => el.addEventListener("change", saveReviews));
+}
+
+async function loadAdmin() {
+  if (!USER?.isWebAdmin) return;
+
+  setActivePage("admin");
+
+  if (!STAFF_CACHE) {
+    STAFF_CACHE = await post("getStaff");
+  }
+
+  const monthValue = document.getElementById("adminMonthSelect")?.value || month();
+  const ratings = await post("getRatings", { month: monthValue });
+
+  const statsBox = document.getElementById("adminStats");
+  const reviewsBox = document.getElementById("adminReviews");
+
+  if (!Array.isArray(STAFF_CACHE) || !Array.isArray(ratings)) {
+    if (statsBox) statsBox.innerHTML = "<div class='card'>❌ Failed to load admin data</div>";
+    if (reviewsBox) reviewsBox.innerHTML = "";
+    return;
+  }
+
+  const numeric = {
+    Excels: 5,
+    "On Par": 4,
+    "Meets Standards": 3,
+    "Below Par": 2,
+    "Needs Work": 1
+  };
+
+  const stats = STAFF_CACHE.map(s => {
+    const teamRatings = ratings.filter(r => String(r.targetId).trim() === String(s.discordId).trim());
+    const count = teamRatings.length;
+    const average = count ? (teamRatings.reduce((sum, r) => sum + (numeric[r.rating] || 0), 0) / count).toFixed(2) : null;
+    const comments = teamRatings.filter(r => String(r.comment ?? "").trim()).length;
+    return { staff: s, count, average, comments, ratings: teamRatings };
+  });
+
+  if (statsBox) {
+    statsBox.innerHTML = stats.map(stat => `
+      <div class="stat-card">
+        <b>${stat.staff.name}</b>
+        <span>Reviews: ${stat.count}</span>
+        <span>Average: ${stat.average ?? "N/A"}</span>
+        <span>Comments: ${stat.comments}</span>
+      </div>
+    `).join("");
+  }
+
+  if (reviewsBox) {
+    reviewsBox.innerHTML = ratings.length ? ratings.map(r => {
+      const target = STAFF_CACHE.find(s => String(s.discordId).trim() === String(r.targetId).trim());
+      const name = target ? target.name : String(r.targetId).trim();
+      return `
+        <div class="review-card">
+          <b>${name}</b>
+          <small>Reviewer: ${String(r.reviewerId).trim()} · Rating: ${r.rating}</small>
+          <p>${String(r.comment || "").trim() || "No comment."}</p>
+        </div>
+      `;
+    }).join("") : "<div class='card'>No ratings found for this month.</div>";
+  }
 }
 
 // ---------------- SAVE ----------------

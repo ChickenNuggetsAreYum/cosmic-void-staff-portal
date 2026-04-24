@@ -116,3 +116,80 @@ button:hover {
 @keyframes spin {
   100% { transform: rotate(360deg); }
 }
+
+.admin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.admin-controls label {
+  font-size: 0.95rem;
+  opacity: 0.8;
+}
+
+.admin-controls select,
+.admin-controls button {
+  max-width: 220px;
+}
+
+#adminStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.stat-card,
+.review-card {
+  background: #111827;
+  padding: 15px;
+  border-radius: 12px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-card b,
+.review-card b {
+  color: #f8fafc;
+}
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.review-card small {
+  color: #94a3b8;
+}
+
+#adminReviews {
+  margin-top: 10px;
+}
+
+.menu a.active {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .card,
+  .review-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card img {
+    width: 60px;
+    height: 60px;
+  }
+}
