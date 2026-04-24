@@ -1,48 +1,40 @@
-body {
+body{
   margin:0;
-  font-family: Arial;
+  font-family:Arial;
   background:#1e1f22;
   color:white;
 }
 
-#loading {
-  padding:20px;
-}
+.hidden{display:none}
 
-.hidden { display:none; }
+#app{display:flex;height:100vh}
 
-#app {
-  display:flex;
-  height:100vh;
-}
-
-.sidebar {
+.sidebar{
   width:200px;
   background:#2b2d31;
-  padding:10px;
 }
 
-.channel {
+.channel{
   padding:10px;
   cursor:pointer;
 }
 
-.channel.active {
+.channel:hover{
   background:#404249;
 }
 
-.main {
+.main{
   flex:1;
   padding:10px;
 }
 
-.card {
+.card{
   background:#313338;
   padding:10px;
-  margin-bottom:10px;
+  margin:10px 0;
   border-radius:8px;
 }
 
-select {
+select{
   width:100%;
 }

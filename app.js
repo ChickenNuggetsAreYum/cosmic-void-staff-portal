@@ -4,79 +4,67 @@ const params = new URLSearchParams(location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
-function month() {
+function month(){
   return new Date().toISOString().slice(0,7);
 }
 
-async function post(action, data={}) {
-  const r = await fetch(API, {
+async function post(action,data={}){
+  const r = await fetch(API,{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ action, ...data })
+    body: JSON.stringify({ action,...data })
   });
   return r.json();
 }
 
-let isAdmin = false;
+let isAdmin=false;
 
-// ---------------- INIT ----------------
+(async()=>{
+  const v = await post("verifyUser",{ discordId:userId, token });
 
-(async () => {
-  if (!userId || !token) {
-    document.body.innerHTML = "Missing credentials";
-    return;
-  }
-
-  const v = await post("verifyUser", { discordId: userId, token });
-
-  if (!v.valid) {
-    document.body.innerHTML = "Unauthorized";
+  if(!v.valid){
+    document.body.innerHTML="Unauthorized";
     return;
   }
 
   isAdmin = v.isWebAdmin;
 
-  if (!isAdmin) {
-    document.getElementById("adminTab").style.display = "none";
+  if(!isAdmin){
+    document.getElementById("adminTab").style.display="none";
   }
 
-  document.getElementById("loading").style.display = "none";
+  document.getElementById("loading").style.display="none";
   document.getElementById("app").classList.remove("hidden");
 
   setupTabs();
   loadRatings();
   loadNotes();
-  loadAdmin();
 })();
 
-// ---------------- TABS ----------------
-
-function setupTabs() {
-  document.querySelectorAll(".channel").forEach(t => {
-    t.onclick = () => {
-      document.querySelectorAll(".tab").forEach(x => x.classList.add("hidden"));
+function setupTabs(){
+  document.querySelectorAll(".channel").forEach(t=>{
+    t.onclick=()=>{
+      document.querySelectorAll(".tab").forEach(x=>x.classList.add("hidden"));
       document.getElementById(t.dataset.tab).classList.remove("hidden");
     };
   });
 }
 
-// ---------------- RATINGS ----------------
-
-async function loadRatings() {
+async function loadRatings(){
   const staff = await post("getStaff");
-  const ratings = await post("getRatings", { month: month() });
+  const ratings = await post("getRatings",{month:month()});
 
   const box = document.getElementById("ratings");
-  box.innerHTML = "";
+  box.innerHTML="";
 
-  staff.forEach(s => {
-    const my = ratings.find(r => r.targetId === s.discordId);
+  staff.forEach(s=>{
+    const my = ratings.find(r=>r.targetId===s.discordId);
 
     box.innerHTML += `
       <div class="card">
         <b>${s.name}</b>
         <select>
-          <option ${my?.rating=="Excels"?"selected":""}>Excels</option>
+          <option ${my?.rating==="Excels"?"selected":""}>Excels</option>
           <option>On Par</option>
           <option>Meets Standards</option>
           <option>Below Par</option>
@@ -88,16 +76,7 @@ async function loadRatings() {
   });
 }
 
-// ---------------- NOTES ----------------
-
-async function loadNotes() {
-  const box = document.getElementById("notes");
-  box.innerHTML = "<div>Notes loaded</div>";
-}
-
-// ---------------- ADMIN ----------------
-
-async function loadAdmin() {
-  const box = document.getElementById("admin");
-  box.innerHTML = isAdmin ? "<div>Admin Panel</div>" : "";
+async function loadNotes(){
+  const box=document.getElementById("notes");
+  box.innerHTML="Notes loaded";
 }
