@@ -37,17 +37,32 @@ async function post(action, data = {}) {
 // ---------------- VERIFY ----------------
 
 async function verify() {
-  const res = await post("verifyUser", {
+  const tokenRes = await post("getToken", { discordId: userId });
+  const verifyRes = await post("verifyUser", {
     discordId: userId,
     token
   });
 
-  if (!res?.valid) {
+  if (!tokenRes?.success) {
     document.body.innerHTML = "❌ Unauthorized";
     throw new Error("Unauthorized");
   }
 
-  USER = res;
+  if (tokenRes.isActive !== true) {
+    setActivePage("revoked");
+    return false;
+  }
+
+  if (!verifyRes?.valid) {
+    document.body.innerHTML = "❌ Unauthorized";
+    throw new Error("Unauthorized");
+  }
+
+  USER = {
+    ...tokenRes,
+    isWebAdmin: verifyRes.isWebAdmin
+  };
+  return true;
 }
 
 // ---------------- NAV ----------------
@@ -84,9 +99,13 @@ function setActivePage(page) {
 
   const reviewsPage = document.getElementById("reviewsPage");
   const adminPage = document.getElementById("adminPage");
+  const revokedPage = document.getElementById("revokedPage");
+  const menu = document.querySelector(".menu");
 
   if (reviewsPage) reviewsPage.classList.toggle("hidden", page !== "reviews");
   if (adminPage) adminPage.classList.toggle("hidden", page !== "admin");
+  if (revokedPage) revokedPage.classList.toggle("hidden", page !== "revoked");
+  if (menu) menu.classList.toggle("hidden", page === "revoked");
 }
 
 function initAdminControls() {
@@ -214,6 +233,11 @@ async function loadAdmin() {
     "Needs Work": 1
   };
 
+  const reviewerMap = STAFF_CACHE.reduce((map, s) => {
+    map[String(s.discordId).trim()] = s.name;
+    return map;
+  }, {});
+
   const stats = STAFF_CACHE.map(s => {
     const teamRatings = ratings.filter(r => String(r.targetId).trim() === String(s.discordId).trim());
     const count = teamRatings.length;
@@ -236,11 +260,12 @@ async function loadAdmin() {
   if (reviewsBox) {
     reviewsBox.innerHTML = ratings.length ? ratings.map(r => {
       const target = STAFF_CACHE.find(s => String(s.discordId).trim() === String(r.targetId).trim());
-      const name = target ? target.name : String(r.targetId).trim();
+      const targetName = target ? target.name : String(r.targetId).trim();
+      const reviewerName = reviewerMap[String(r.reviewerId).trim()] || String(r.reviewerId).trim();
       return `
         <div class="review-card">
-          <b>${name}</b>
-          <small>Reviewer: ${String(r.reviewerId).trim()} · Rating: ${r.rating}</small>
+          <b>${targetName}</b>
+          <small>Reviewer: ${reviewerName} · Rating: ${r.rating}</small>
           <p>${String(r.comment || "").trim() || "No comment."}</p>
         </div>
       `;
@@ -284,7 +309,8 @@ async function saveReviews() {
 
 (async () => {
   try {
-    await verify();
+    const allowed = await verify();
+    if (!allowed) return;
     setupNav();
     await loadReviews();
   } catch (e) {
