@@ -4,42 +4,32 @@ const params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
-function getMonth() {
+function month() {
   return new Date().toISOString().slice(0,7);
 }
 
-// Navigation links
+function post(action, data = {}) {
+  return fetch(API, {
+    method: "POST",
+    body: JSON.stringify({ action, ...data })
+  }).then(r => r.json());
+}
+
+// ---------------- NAV ----------------
+
 if (document.getElementById("ratingsLink")) {
   document.getElementById("ratingsLink").href = `ratings.html?id=${userId}&token=${token}`;
   document.getElementById("notesLink").href = `notes.html?id=${userId}&token=${token}`;
   document.getElementById("adminLink").href = `admin.html?id=${userId}&token=${token}`;
 }
 
-// =====================
-// LOAD STAFF
-// =====================
-async function fetchStaff() {
-  const res = await fetch(API, {
-    method: "POST",
-    body: JSON.stringify({ action: "getStaff" })
-  });
+// ---------------- RATINGS ----------------
 
-  return await res.json();
-}
+if (document.getElementById("staffList")) loadRatings();
 
-// =====================
-// RATINGS PAGE
-// =====================
-if (document.getElementById("staffList")) {
-  loadRatingsPage();
-}
-
-async function loadRatingsPage() {
-  const staff = await fetchStaff();
+async function loadRatings() {
+  const staff = await post("getStaff");
   const container = document.getElementById("staffList");
-
-  let count = 0;
-  let total = 0;
 
   staff.forEach(s => {
     if (!s.isActive) return;
@@ -48,15 +38,13 @@ async function loadRatingsPage() {
     div.className = "card";
 
     if (s.discordId == userId) {
-      div.innerHTML = `<b>${s.name} (This is you)</b>`;
+      div.innerHTML = `<b>${s.name} (You)</b>`;
     } else {
-      total++;
-
       div.innerHTML = `
-        <img src="${s.avatarURL}">
+        <img src="${s.avatarURL}" width="50">
         <b>${s.name}</b>
+
         <select data-id="${s.discordId}">
-          <option value="">Select Rating</option>
           <option>Excels</option>
           <option>On Par</option>
           <option>Meets Standards</option>
@@ -64,14 +52,13 @@ async function loadRatingsPage() {
           <option>Needs Work</option>
           <option>N/A</option>
         </select>
-        <textarea placeholder="Comment..." data-comment="${s.discordId}"></textarea>
+
+        <textarea data-comment="${s.discordId}" placeholder="Comment"></textarea>
       `;
     }
 
     container.appendChild(div);
   });
-
-  document.getElementById("progress").innerText = `0 / ${total} completed`;
 }
 
 async function saveRatings() {
@@ -80,10 +67,8 @@ async function saveRatings() {
   let ratings = [];
 
   selects.forEach(s => {
-    if (!s.value) return;
-
     const id = s.dataset.id;
-    const comment = document.querySelector(`[data-comment='${id}']`).value;
+    const comment = document.querySelector(`[data-comment='${id}']`)?.value || "";
 
     ratings.push({
       targetId: id,
@@ -92,28 +77,21 @@ async function saveRatings() {
     });
   });
 
-  await fetch(API, {
-    method: "POST",
-    body: JSON.stringify({
-      action: "saveRatings",
-      reviewerId: userId,
-      month: getMonth(),
-      ratings
-    })
+  await post("saveRatings", {
+    reviewerId: userId,
+    month: month(),
+    ratings
   });
 
-  alert("Ratings saved!");
+  alert("Saved!");
 }
 
-// =====================
-// NOTES PAGE
-// =====================
-if (document.getElementById("notesList")) {
-  loadNotesPage();
-}
+// ---------------- NOTES ----------------
 
-async function loadNotesPage() {
-  const staff = await fetchStaff();
+if (document.getElementById("notesList")) loadNotes();
+
+async function loadNotes() {
+  const staff = await post("getStaff");
   const container = document.getElementById("notesList");
 
   staff.forEach(s => {
@@ -123,55 +101,29 @@ async function loadNotesPage() {
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL}">
+      <img src="${s.avatarURL}" width="50">
       <b>${s.name}</b>
+
       <button onclick="sendNote('${s.discordId}','positive')">👍</button>
       <button onclick="sendNote('${s.discordId}','negative')">👎</button>
-      <textarea id="note-${s.discordId}" placeholder="Write note..."></textarea>
+
+      <textarea id="n-${s.discordId}" placeholder="Note"></textarea>
     `;
 
     container.appendChild(div);
   });
 }
 
-async function sendNote(targetId, type) {
-  const note = document.getElementById(`note-${targetId}`).value;
+async function sendNote(id, type) {
+  const note = document.getElementById(`n-${id}`).value;
 
-  await fetch(API, {
-    method: "POST",
-    body: JSON.stringify({
-      action: "saveNote",
-      authorId: userId,
-      targetId,
-      type,
-      note,
-      month: getMonth()
-    })
+  await post("saveNote", {
+    authorId: userId,
+    targetId: id,
+    type,
+    note,
+    month: month()
   });
 
-  alert("Note saved!");
-}
-
-// =====================
-// ADMIN PAGE
-// =====================
-if (document.getElementById("adminContent")) {
-  loadAdmin();
-}
-
-async function loadAdmin() {
-  const staff = await fetchStaff();
-  const me = staff.find(s => s.discordId == userId);
-
-  if (!me || !me.isWebAdmin) {
-    document.body.innerHTML = "Access Denied";
-    return;
-  }
-
-  document.getElementById("adminContent").innerHTML =
-    "<p>Admin access granted</p>";
-}
-
-function resetMonth() {
-  alert("Manual reset: just start new month (data stays)");
+  alert("Saved note!");
 }
