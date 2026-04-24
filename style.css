@@ -1,18 +1,21 @@
 body.app {
   margin: 0;
-  font-family: Arial;
+  font-family: system-ui, Arial;
   background: #313338;
   color: white;
 }
 
+.hidden { display: none; }
+
+/* layout */
 .layout {
   display: flex;
   height: 100vh;
 }
 
-/* SIDEBAR */
+/* sidebar */
 .sidebar {
-  width: 220px;
+  width: 240px;
   background: #1e1f22;
   padding: 10px;
 }
@@ -20,13 +23,15 @@ body.app {
 .title {
   font-weight: bold;
   margin-bottom: 10px;
+  color: #dbdee1;
 }
 
 .channel {
-  padding: 8px;
+  padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
   color: #b5bac1;
+  margin-bottom: 4px;
 }
 
 .channel:hover {
@@ -38,26 +43,41 @@ body.app {
   color: white;
 }
 
-/* MAIN */
+/* main */
 .main {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
 }
 
-.hidden {
-  display: none;
-}
-
-/* CARDS */
+/* discord-like cards */
 .card {
   background: #2b2d31;
   padding: 10px;
-  margin: 10px 0;
+  margin-bottom: 10px;
   border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
-img {
+.card img {
   width: 40px;
+  height: 40px;
   border-radius: 50%;
+}
+
+/* inputs */
+select, textarea {
+  background: #1e1f22;
+  color: white;
+  border: 1px solid #404249;
+  border-radius: 6px;
+  padding: 5px;
+  width: 100%;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 40px;
 }

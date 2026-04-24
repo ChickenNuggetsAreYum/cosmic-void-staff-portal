@@ -4,15 +4,10 @@ const params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
+let staffData = [];
+
 function month() {
   return new Date().toISOString().slice(0, 7);
-}
-
-// ---------------- NAV / TABS ----------------
-
-function openTab(tab) {
-  document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
-  document.getElementById(tab).classList.remove("hidden");
 }
 
 // ---------------- API ----------------
@@ -24,12 +19,17 @@ async function post(action, data = {}) {
     body: JSON.stringify({ action, ...data })
   });
 
-  return await res.json();
+  return res.json();
 }
 
-// ---------------- AUTH ----------------
+// ---------------- AUTH (NO FLASH) ----------------
 
 async function verify() {
+  if (!userId || !token) {
+    document.body.innerHTML = "❌ Missing credentials";
+    throw new Error();
+  }
+
   const res = await post("verifyUser", {
     discordId: userId,
     token
@@ -40,74 +40,97 @@ async function verify() {
     throw new Error();
   }
 
-  if (res.isWebAdmin) {
-    document.getElementById("adminChannel").style.display = "block";
-  } else {
-    document.getElementById("adminChannel").style.display = "none";
+  document.getElementById("app").classList.remove("hidden");
+
+  if (!res.isWebAdmin) {
+    document.getElementById("adminTab").style.display = "none";
   }
 
   return res;
 }
 
-// ---------------- DASHBOARD ----------------
+// ---------------- TAB SYSTEM (FIXED ACTIVE STATE) ----------------
 
-async function loadHome() {
-  const el = document.getElementById("statusText");
+function setupTabs() {
+  document.querySelectorAll(".channel").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
 
-  const data = await post("getDashboardStatus", {
-    month: month()
+      document.querySelectorAll(".channel").forEach(c => c.classList.remove("active"));
+
+      btn.classList.add("active");
+
+      document.getElementById(btn.dataset.tab).classList.remove("hidden");
+    };
   });
-
-  el.innerText = `📊 ${data.completed} / ${data.totalStaff} completed`;
 }
 
-// ---------------- RATINGS ----------------
+// ---------------- HOME ----------------
+
+async function loadHome() {
+  const res = await post("getDashboardStatus", { month: month() });
+
+  document.getElementById("statusText").innerText =
+    `📊 ${res.completed} / ${res.totalStaff} completed`;
+}
+
+// ---------------- RATINGS (AUTO SAVE) ----------------
 
 async function loadRatings() {
-  const staff = await post("getStaff");
-  const c = document.getElementById("staffRatings");
+  staffData = await post("getStaff");
 
+  const c = document.getElementById("staffRatings");
   c.innerHTML = "";
 
-  staff.forEach(s => {
-    if (!s.isActive || s.discordId === userId) return;
+  staffData.forEach(s => {
+    if (!s.isActive) return;
+
+    const isYou = s.discordId === userId;
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
       <img src="${s.avatarURL}">
-      <b>${s.name}</b>
 
-      <select data-id="${s.discordId}">
-        <option>Excels</option>
-        <option>On Par</option>
-        <option>Meets Standards</option>
-        <option>Below Par</option>
-        <option>Needs Work</option>
-        <option>N/A</option>
-      </select>
+      <div style="flex:1">
+        <b>${s.name} ${isYou ? "(You)" : ""}</b>
 
-      <textarea data-comment="${s.discordId}"></textarea>
+        ${isYou ? `<div style="opacity:.7">This is you!</div>` : `
+          <select data-id="${s.discordId}">
+            <option>Excels</option>
+            <option>On Par</option>
+            <option>Meets Standards</option>
+            <option>Below Par</option>
+            <option>Needs Work</option>
+            <option>N/A</option>
+          </select>
+
+          <textarea data-id="${s.discordId}" placeholder="Comment"></textarea>
+        `}
+      </div>
     `;
 
     c.appendChild(div);
   });
+
+  // auto-save (no button)
+  document.querySelectorAll("select, textarea").forEach(el => {
+    el.onchange = saveRatings;
+  });
 }
 
 async function saveRatings() {
-  const selects = document.querySelectorAll("select");
+  const ratings = [];
 
-  let ratings = [];
-
-  selects.forEach(s => {
-    const id = s.dataset.id;
+  document.querySelectorAll("select").forEach(sel => {
+    const id = sel.dataset.id;
     if (!id) return;
 
     ratings.push({
       targetId: id,
-      rating: s.value,
-      comment: document.querySelector(`[data-comment="${id}"]`)?.value || ""
+      rating: sel.value,
+      comment: document.querySelector(`textarea[data-id="${id}"]`)?.value || ""
     });
   });
 
@@ -117,15 +140,13 @@ async function saveRatings() {
     month: month(),
     ratings
   });
-
-  alert("Saved!");
 }
 
 // ---------------- NOTES ----------------
 
 async function loadNotes() {
-  const staff = await post("getStaff");
   const c = document.getElementById("staffNotes");
+  const staff = staffData.length ? staffData : await post("getStaff");
 
   c.innerHTML = "";
 
@@ -137,12 +158,14 @@ async function loadNotes() {
 
     div.innerHTML = `
       <img src="${s.avatarURL}">
-      <b>${s.name}</b>
+      <div style="flex:1">
+        <b>${s.name}</b>
 
-      <button onclick="sendNote('${s.discordId}','positive')">👍</button>
-      <button onclick="sendNote('${s.discordId}','negative')">👎</button>
+        <button onclick="sendNote('${s.discordId}','up')">👍</button>
+        <button onclick="sendNote('${s.discordId}','down')">👎</button>
 
-      <textarea id="n-${s.discordId}"></textarea>
+        <textarea id="n-${s.discordId}" placeholder="Add note"></textarea>
+      </div>
     `;
 
     c.appendChild(div);
@@ -160,17 +183,16 @@ async function sendNote(id, type) {
     note,
     month: month()
   });
-
-  alert("Saved");
 }
 
-// ---------------- INIT ----------------
+// ---------------- INIT (CRITICAL ORDER FIX) ----------------
 
 (async () => {
   await verify();
+
+  setupTabs();
+
   await loadHome();
   await loadRatings();
   await loadNotes();
-
-  openTab("home");
 })();
