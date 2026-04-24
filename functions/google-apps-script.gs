@@ -175,8 +175,9 @@ function getNotes(d) {
         month,
         reviewerId: normalizeId(rows[i][1]),
         targetId,
-        note: rows[i][3],
-        updatedAt: rows[i][4]
+        type: String(rows[i][3] || "Positive").trim() || "Positive",
+        note: rows[i][4],
+        updatedAt: rows[i][5]
       });
     }
   }
@@ -189,6 +190,7 @@ function saveNotes(d) {
   const month = normalizeMonth(d.month);
   const reviewerId = normalizeId(d.reviewerId);
   const targetId = normalizeId(d.targetId);
+  const type = String(d.type || "Positive").trim() || "Positive";
   const note = String(d.note || "").trim();
   const updatedAt = new Date();
 
@@ -200,8 +202,9 @@ function saveNotes(d) {
       normalizeId(rows[i][1]) === reviewerId &&
       normalizeId(rows[i][2]) === targetId
     ) {
-      sheet(NOTES_TAB).getRange(i + 1, 4).setValue(note);
-      sheet(NOTES_TAB).getRange(i + 1, 5).setValue(updatedAt);
+      sheet(NOTES_TAB).getRange(i + 1, 4).setValue(type);
+      sheet(NOTES_TAB).getRange(i + 1, 5).setValue(note);
+      sheet(NOTES_TAB).getRange(i + 1, 6).setValue(updatedAt);
       found = true;
       break;
     }
@@ -212,6 +215,7 @@ function saveNotes(d) {
       month,
       reviewerId,
       targetId,
+      type,
       note,
       updatedAt
     ]);

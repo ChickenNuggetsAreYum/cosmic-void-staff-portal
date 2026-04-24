@@ -8,6 +8,10 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
+function isTrue(value) {
+  return value === true || String(value).trim().toLowerCase() === "true";
+}
+
 // ---------------- CACHE ----------------
 
 let STAFF_CACHE = null;
@@ -168,7 +172,7 @@ async function loadReviews() {
   }, {});
 
   STAFF_CACHE.forEach(s => {
-    if (!s.isActive) return;
+    if (!isTrue(s.isActive)) return;
 
     const isYou = String(s.discordId) === String(userId);
     const my = ratingMap[`${String(s.discordId).trim()}|${String(userId).trim()}`];
@@ -184,7 +188,7 @@ async function loadReviews() {
           <b>${s.name}</b>
           <p style="opacity:0.6;">This is you</p>
         ` : `
-          <button class="staff-link" data-id="${s.discordId}">${s.name}</button>
+          <button type="button" class="staff-link" data-id="${s.discordId}">${s.name}</button>
           <select data-id="${s.discordId}">
             ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
               .map(v => {
@@ -256,12 +260,14 @@ function renderRatingList(staff, ratings, adminView) {
 
 async function saveNote(targetId, adminView = false) {
   const noteInput = document.getElementById("detailsNoteInput");
-  if (!noteInput) return;
+  const noteType = document.getElementById("detailsNoteType");
+  if (!noteInput || !noteType) return;
 
   await post("saveNotes", {
     month: month(),
     reviewerId: userId,
     targetId,
+    type: noteType.value,
     note: noteInput.value.trim()
   });
 
@@ -289,6 +295,7 @@ function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminV
 
   const noteEntry = notes.find(n => String(n.reviewerId).trim() === String(userId).trim());
   const noteText = noteEntry?.note || "";
+  const noteTypeValue = noteEntry?.type || "Positive";
 
   panel.innerHTML = `
     <div class="details-panel">
@@ -302,6 +309,12 @@ function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminV
           ${renderRatingList(staff, ratings, adminView)}
         ` : `
           <div>
+            <label for="detailsNoteType"><b>${adminView ? "Note type" : "Note type"}</b></label>
+            <select id="detailsNoteType">
+              <option value="Positive" ${noteTypeValue === "Positive" ? "selected" : ""}>Positive 👍</option>
+              <option value="Negative" ${noteTypeValue === "Negative" ? "selected" : ""}>Negative 👎</option>
+            </select>
+
             <label for="detailsNoteInput"><b>${adminView ? "Add or update a note" : "Your note"}</b></label>
             <textarea id="detailsNoteInput" rows="5">${noteText}</textarea>
             <button id="saveDetailsNote">Save Note</button>
@@ -310,9 +323,10 @@ function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminV
               <b>Existing notes</b>
               ${notes.length ? notes.map(note => {
                 const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(note.reviewerId).trim());
+                const icon = note.type === "Negative" ? "👎" : "👍";
                 return `
                   <div class="note-item">
-                    <small>${reviewer?.name || note.reviewerId}</small>
+                    <small>${icon} ${reviewer?.name || note.reviewerId}</small>
                     <p>${String(note.note || "").trim() || "No note."}</p>
                   </div>
                 `;
@@ -356,10 +370,10 @@ async function loadAdmin() {
     return;
   }
 
-  const staffRows = STAFF_CACHE.filter(s => s.isActive === true);
+  const staffRows = STAFF_CACHE.filter(s => isTrue(s.isActive));
 
   if (listBox) {
-    listBox.innerHTML = staffRows.length ? staffRows.map(s => {
+    listBox.innerHTML = staffRows.length ? `<div class="admin-list">${staffRows.map(s => {
       const count = ratings.filter(r => String(r.targetId).trim() === String(s.discordId).trim()).length;
       return `
         <div class="staff-card" data-id="${s.discordId}">
@@ -367,7 +381,7 @@ async function loadAdmin() {
           <p>Ratings: ${count}</p>
         </div>
       `;
-    }).join("") : "<div class='card'>No active staff found.</div>";
+    }).join("")}</div>` : "<div class='card'>No active staff found.</div>";
   }
 
   if (detailBox) {
