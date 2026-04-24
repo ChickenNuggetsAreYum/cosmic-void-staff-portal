@@ -1,18 +1,55 @@
 body {
+  background: #250242;
+  color: white;
+  font-family: Arial;
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #121212;
-  color: #f5f5f5;
 }
-header {
-  padding: 1rem;
-  background: #1f1f1f;
+
+.header {
+  text-align: center;
+  padding: 20px;
 }
-nav a {
-  color: #8ab4f8;
-  margin-right: 1rem;
-  text-decoration: none;
+
+.header img {
+  width: 120px;
+  border-radius: 50%;
 }
-main {
-  padding: 1.5rem;
+
+.container {
+  text-align: center;
+  margin-top: 40px;
+}
+
+a {
+  display: block;
+  margin: 15px;
+  font-size: 18px;
+  color: rgb(89, 0, 255);
+  cursor: pointer;
+}
+
+.list {
+  padding: 20px;
+}
+
+.card {
+  background: #10052e;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 10px;
+}
+
+.card img {
+  width: 50px;
+  border-radius: 50%;
+}
+
+select, textarea {
+  width: 100%;
+  margin-top: 5px;
+}
+
+button {
+  margin: 20px;
+  padding: 10px 20px;
 }

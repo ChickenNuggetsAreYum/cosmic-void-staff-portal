@@ -1,25 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Admin</h1>
-    <nav>
-      <a href="index.html">Home</a>
-      <a href="ratings.html">Ratings</a>
-      <a href="notes.html">Notes</a>
-    </nav>
-  </header>
-  <main>
-    <section>
-      <p>Administration dashboard and controls.</p>
-    </section>
-  </main>
+
+  <div class="header">
+    <h2>Admin Panel</h2>
+  </div>
+
+  <div id="adminContent"></div>
+
+  <button onclick="resetMonth()">Reset Month</button>
+
   <script src="app.js"></script>
 </body>
 </html>

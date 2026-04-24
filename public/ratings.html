@@ -1,25 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ratings</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Ratings</h1>
-    <nav>
-      <a href="index.html">Home</a>
-      <a href="notes.html">Notes</a>
-      <a href="admin.html">Admin</a>
-    </nav>
-  </header>
-  <main>
-    <section>
-      <p>View and manage staff ratings here.</p>
-    </section>
-  </main>
+
+  <div class="header">
+    <h2>Monthly Staff Ratings</h2>
+    <div id="progress"></div>
+  </div>
+
+  <div id="staffList" class="list"></div>
+
+  <button onclick="saveRatings()">Save Ratings</button>
+
   <script src="app.js"></script>
 </body>
 </html>
