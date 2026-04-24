@@ -62,7 +62,8 @@ function setupNav() {
 // ---------------- LOAD REVIEWS ----------------
 
 async function loadReviews() {
-  const box = document.getElementById("ratingsBox");
+  const box = document.getElementById("reviewsBox");
+  const spinner = document.getElementById("loadingSpinner");
   if (!box) return;
 
   // fetch once only
@@ -75,10 +76,12 @@ async function loadReviews() {
   }
 
   if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
+    if (spinner) spinner.style.display = "none";
     box.innerHTML = "❌ Failed to load data";
     return;
   }
 
+  if (spinner) spinner.style.display = "none";
   box.innerHTML = "";
 
   STAFF_CACHE.forEach(s => {
