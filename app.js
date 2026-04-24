@@ -8,19 +8,38 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-function post(action, data = {}) {
-  return fetch(API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...data })
-  }).then(r => r.json());
+// ---------------- SAFE API WRAPPER ----------------
+
+async function post(action, data = {}) {
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ action, ...data })
+    });
+
+    const text = await res.text();
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Non-JSON response from server:", text);
+      throw new Error("Invalid server response");
+    }
+
+  } catch (err) {
+    console.error("Fetch error:", err);
+    throw err;
+  }
 }
 
-// ---------------- SECURITY CHECK (IMPORTANT) ----------------
+// ---------------- AUTH CHECK (BLOCK ACCESS) ----------------
 
 async function verifyAccess() {
   if (!userId || !token) {
-    document.body.innerHTML = "<h2>❌ Access denied (missing credentials)</h2>";
+    document.body.innerHTML = "<h2>❌ Missing credentials</h2>";
     return false;
   }
 
@@ -30,19 +49,19 @@ async function verifyAccess() {
       token: token
     });
 
-    if (!res || !res.valid) {
-      document.body.innerHTML = "<h2>❌ Invalid or expired token</h2>";
+    if (!res || res.valid !== true) {
+      document.body.innerHTML = "<h2>❌ Invalid or expired login</h2>";
       return false;
     }
 
-    return true;
+    return res; // contains isWebAdmin
   } catch (e) {
     document.body.innerHTML = "<h2>❌ Unable to verify access</h2>";
     return false;
   }
 }
 
-// ---------------- NAV ----------------
+// ---------------- NAV SETUP ----------------
 
 function setupNav(isAdmin) {
   const ratingsLink = document.getElementById("ratingsLink");
@@ -67,26 +86,30 @@ function setupNav(isAdmin) {
   }
 }
 
-// ---------------- INIT ----------------
+// ---------------- INIT FLOW ----------------
 
 (async () => {
-  const ok = await verifyAccess();
-  if (!ok) return;
+  const auth = await verifyAccess();
+  if (!auth) return;
+
+  setupNav(auth.isWebAdmin === true);
 
   const staff = await post("getStaff");
-  const me = staff.find(s => s.discordId == userId);
 
-  setupNav(me?.isWebAdmin === true);
+  if (document.getElementById("staffList")) {
+    loadRatings(staff);
+  }
 
-  if (document.getElementById("staffList")) loadRatings();
-  if (document.getElementById("notesList")) loadNotes();
+  if (document.getElementById("notesList")) {
+    loadNotes(staff);
+  }
 })();
 
 // ---------------- RATINGS ----------------
 
-async function loadRatings() {
-  const staff = await post("getStaff");
+async function loadRatings(staff) {
   const container = document.getElementById("staffList");
+  container.innerHTML = "";
 
   staff.forEach(s => {
     if (!s.isActive) return;
@@ -98,7 +121,7 @@ async function loadRatings() {
       div.innerHTML = `<b>${s.name} (You)</b>`;
     } else {
       div.innerHTML = `
-        <img src="${s.avatarURL}" width="50">
+        <img src="${s.avatarURL}">
         <b>${s.name}</b>
 
         <select data-id="${s.discordId}">
@@ -138,6 +161,7 @@ async function saveRatings() {
 
   await post("saveRatings", {
     reviewerId: userId,
+    token: token,
     month: month(),
     ratings
   });
@@ -147,9 +171,9 @@ async function saveRatings() {
 
 // ---------------- NOTES ----------------
 
-async function loadNotes() {
-  const staff = await post("getStaff");
+async function loadNotes(staff) {
   const container = document.getElementById("notesList");
+  container.innerHTML = "";
 
   staff.forEach(s => {
     if (!s.isActive || s.discordId == userId) return;
@@ -158,7 +182,7 @@ async function loadNotes() {
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL}" width="50">
+      <img src="${s.avatarURL}">
       <b>${s.name}</b>
 
       <button onclick="sendNote('${s.discordId}','positive')">👍</button>
@@ -176,6 +200,7 @@ async function sendNote(id, type) {
 
   await post("saveNote", {
     authorId: userId,
+    token: token,
     targetId: id,
     type,
     note,
