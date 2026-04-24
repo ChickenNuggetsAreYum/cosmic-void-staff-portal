@@ -67,6 +67,15 @@ async function loadReviews() {
     setLoading(false);
     return;
   }
+  setTimeout(() => {
+  const spinner = document.getElementById("loadingSpinner");
+  if (spinner) spinner.style.display = "none";
+
+  const box = document.getElementById("ratingsBox");
+  if (box && box.innerHTML === "") {
+    box.innerHTML = "⚠️ Loading timed out. Try refreshing.";
+  }
+}, 10000);
 
   box.innerHTML = "";
 
