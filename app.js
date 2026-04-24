@@ -4,18 +4,23 @@ const params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
-function month(){
-  return new Date().toISOString().slice(0,7);
+function month() {
+  return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- SAFE FETCH ----------------
+// ---------------- CACHE ----------------
 
-async function post(action,data={}){
+let STAFF_CACHE = null;
+let RATINGS_CACHE = null;
+
+// ---------------- API ----------------
+
+async function post(action, data = {}) {
   try {
-    const res = await fetch(API,{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({action,...data})
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data })
     });
 
     const text = await res.text();
@@ -23,77 +28,87 @@ async function post(action,data={}){
 
   } catch (e) {
     console.error("API ERROR:", action, e);
-    return {};
+    return null;
+  }
+}
+
+// ---------------- VERIFY ----------------
+
+async function verify() {
+  const res = await post("verifyUser", {
+    discordId: userId,
+    token
+  });
+
+  if (!res?.valid) {
+    document.body.innerHTML = "❌ Unauthorized";
+    throw new Error("Unauthorized");
   }
 }
 
 // ---------------- NAV ----------------
 
-function setupNav(){
-  document.querySelectorAll(".menu a").forEach(a=>{
-    a.addEventListener("click",(e)=>{
+function setupNav() {
+  const reviewsTab = document.querySelector("[data-page='reviews']");
+
+  if (reviewsTab) {
+    reviewsTab.addEventListener("click", async (e) => {
       e.preventDefault();
-
-      const page = a.dataset.page;
-
-      document.getElementById("ratingsPage").classList.add("hidden");
-      document.getElementById("notesPage").classList.add("hidden");
-
-      document.getElementById(page + "Page").classList.remove("hidden");
+      await loadReviews();
     });
-  });
-
-  // default page
-  document.getElementById("ratingsPage").classList.remove("hidden");
-}
-
-// ---------------- VERIFY ----------------
-
-async function verify(){
-  const res = await post("verifyUser",{discordId:userId,token});
-
-  if(!res.valid){
-    document.body.innerHTML="❌ Unauthorized";
-    throw new Error();
   }
 }
 
-// ---------------- RATINGS ----------------
+// ---------------- LOAD REVIEWS ----------------
 
-async function loadRatings(){
-
+async function loadReviews() {
   const box = document.getElementById("ratingsBox");
-  if(!box) return;
+  if (!box) return;
 
-  const staff = await post("getStaff");
-  const existing = await post("getRatings",{month:month()});
+  // fetch once only
+  if (!STAFF_CACHE) {
+    STAFF_CACHE = await post("getStaff");
+  }
 
-  box.innerHTML="";
+  if (!RATINGS_CACHE) {
+    RATINGS_CACHE = await post("getRatings", { month: month() });
+  }
 
-  staff.forEach(s=>{
+  if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
+    box.innerHTML = "❌ Failed to load data";
+    return;
+  }
 
-    if(!s.isActive) return;
+  box.innerHTML = "";
 
-    const isYou = s.discordId === userId;
-    const my = existing.find(e=>e.targetId===s.discordId);
+  STAFF_CACHE.forEach(s => {
+    if (!s.isActive) return;
+
+    const isYou = String(s.discordId) === String(userId);
+
+    const my = RATINGS_CACHE.find(e =>
+      String(e.targetId) === String(s.discordId)
+    );
 
     const div = document.createElement("div");
-    div.className="card";
+    div.className = "card";
 
-    div.innerHTML=`
-      <img src="${s.avatarURL||''}">
+    div.innerHTML = `
+      <img src="${s.avatarURL || ''}">
       <div>
         <b>${s.name}</b>
 
         ${isYou ? `
-          <p style="opacity:.6">This is you</p>
+          <p style="opacity:0.6;">This is you</p>
         ` : `
           <select data-id="${s.discordId}">
             ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
-              .map(v=>`<option ${my?.rating===v?"selected":""}>${v}</option>`).join("")}
+              .map(v => `
+                <option ${my?.rating === v ? "selected" : ""}>${v}</option>
+              `).join("")}
           </select>
 
-          <textarea data-id="${s.discordId}">${my?.comment||""}</textarea>
+          <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
         `}
       </div>
     `;
@@ -101,115 +116,51 @@ async function loadRatings(){
     box.appendChild(div);
   });
 
-  document.querySelectorAll("select,textarea").forEach(el=>{
-    el.addEventListener("change",saveRatings);
-  });
+  document.querySelectorAll("select, textarea")
+    .forEach(el => el.addEventListener("change", saveReviews));
 }
 
-async function saveRatings(){
+// ---------------- SAVE ----------------
 
-  const ratings=[];
+async function saveReviews() {
+  const ratings = [];
 
-  document.querySelectorAll("select").forEach(sel=>{
-
+  document.querySelectorAll("select").forEach(sel => {
     const id = sel.dataset.id;
-    if(!id || id===userId) return;
 
-    const comment = document.querySelector(`textarea[data-id="${id}"]`)?.value || "";
+    if (!id || id === userId) return;
+    if (sel.value === "N/A") return;
 
-    if(sel.value==="N/A") return;
+    const comment =
+      document.querySelector(`textarea[data-id="${id}"]`)?.value || "";
 
     ratings.push({
-      targetId:id,
-      rating:sel.value,
+      targetId: id,
+      rating: sel.value,
       comment
     });
   });
 
-  await post("saveRatings",{
-    reviewerId:userId,
+  await post("saveRatings", {
+    reviewerId: userId,
     token,
-    month:month(),
+    month: month(),
     ratings
   });
+
+  // refresh cache so edits persist instantly
+  RATINGS_CACHE = await post("getRatings", { month: month() });
 }
 
-// ---------------- NOTES ----------------
+// ---------------- INIT ----------------
 
-async function loadNotes(){
-
-  const box=document.getElementById("notesBox");
-  if(!box) return;
-
-  const staff = await post("getStaff");
-  const notes = await post("getNotes",{month:month()});
-
-  box.innerHTML="";
-
-  staff.forEach(s=>{
-
-    const isYou = s.discordId === userId;
-    const list = notes[s.discordId] || [];
-
-    const div=document.createElement("div");
-    div.className="card";
-
-    div.innerHTML=`
-      <img src="${s.avatarURL||''}">
-      <div>
-        <b>${s.name}</b>
-
-        <div>
-          ${list.length
-            ? list.map(n=>`<div>${n.type==="positive"?"👍":"👎"} ${n.note}</div>`).join("")
-            : "<i>No notes</i>"
-          }
-        </div>
-
-        ${isYou ? `<p style="opacity:.6">This is you</p>` : `
-          <textarea data-id="${s.discordId}"></textarea>
-          <button onclick="addNote('${s.discordId}','positive')">👍</button>
-          <button onclick="addNote('${s.discordId}','negative')">👎</button>
-        `}
-      </div>
-    `;
-
-    box.appendChild(div);
-  });
-}
-
-async function addNote(id,type){
-
-  const input=document.querySelector(`textarea[data-id="${id}"]`);
-  const text=input?.value;
-
-  if(!text || !text.trim()) return;
-
-  await post("saveNote",{
-    month:month(),
-    authorId:userId,
-    token,
-    targetId:id,
-    type,
-    note:text
-  });
-
-  loadNotes();
-}
-
-// ---------------- INIT (NO CRASH LOADING FIX) ----------------
-
-(async()=>{
+(async () => {
   try {
-
     await verify();
     setupNav();
-
-    await loadRatings();
-    await loadNotes();
-
+    await loadReviews();
   } catch (e) {
     console.error(e);
-    document.body.innerHTML="❌ Failed to load portal";
+    document.body.innerHTML = "❌ Failed to load portal";
   }
 })();
