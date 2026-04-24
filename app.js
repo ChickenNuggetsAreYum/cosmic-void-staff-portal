@@ -8,25 +8,16 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- API WRAPPER ----------------
+// ---------------- API ----------------
 
 async function post(action, data = {}) {
   const res = await fetch(API, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, ...data })
   });
 
-  const text = await res.text();
-
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    console.error("Bad API response:", text);
-    throw new Error("Invalid server response");
-  }
+  return await res.json();
 }
 
 // ---------------- AUTH ----------------
@@ -37,78 +28,49 @@ async function verifyAccess() {
     return null;
   }
 
-  try {
-    const res = await post("verifyUser", {
-      discordId: userId,
-      token: token
-    });
+  const res = await post("verifyUser", {
+    discordId: userId,
+    token
+  });
 
-    if (!res || res.valid !== true) {
-      document.body.innerHTML = "<h2>❌ Invalid or expired login</h2>";
-      return null;
-    }
-
-    return res;
-  } catch (e) {
-    console.error(e);
-    document.body.innerHTML = "<h2>❌ Unable to verify access</h2>";
+  if (!res || res.valid !== true) {
+    document.body.innerHTML = "<h2>❌ Invalid login</h2>";
     return null;
   }
+
+  return res;
+}
+
+// ---------------- DASHBOARD ----------------
+
+async function loadDashboard() {
+  const el = document.getElementById("statusText");
+  if (!el) return;
+
+  const data = await post("getDashboardStatus", {
+    month: month()
+  });
+
+  el.innerText =
+    `📊 ${data.completed} / ${data.totalStaff} completed`;
+
+  return data;
 }
 
 // ---------------- NAV ----------------
 
 function setupNav(isAdmin) {
-  const nav = document.querySelector(".nav");
-  const adminLink = document.getElementById("adminLink");
+  const admin = document.getElementById("adminLink");
+  if (admin) admin.style.display = isAdmin ? "inline-block" : "none";
 
-  // prevent flash
-  if (nav) nav.style.visibility = "visible";
+  document.getElementById("ratingsLink").href =
+    `ratings.html?id=${userId}&token=${token}`;
 
-  if (adminLink) {
-    if (isAdmin) {
-      adminLink.style.display = "inline-block";
-      adminLink.href = `admin.html?id=${userId}&token=${token}`;
-    } else {
-      adminLink.style.display = "none";
-    }
-  }
-
-  const ratingsLink = document.getElementById("ratingsLink");
-  const notesLink = document.getElementById("notesLink");
-
-  if (ratingsLink) {
-    ratingsLink.href = `ratings.html?id=${userId}&token=${token}`;
-  }
-
-  if (notesLink) {
-    notesLink.href = `notes.html?id=${userId}&token=${token}`;
-  }
+  document.getElementById("notesLink").href =
+    `notes.html?id=${userId}&token=${token}`;
 }
 
-// ---------------- STATUS ----------------
-
-async function loadStatus() {
-  const el = document.getElementById("statusText");
-  if (!el) return;
-
-  el.innerText = "Loading...";
-
-  try {
-    const staff = await post("getStaff");
-
-    if (!Array.isArray(staff)) throw new Error("Bad staff data");
-
-    const active = staff.filter(s => s.isActive === true).length;
-
-    el.innerText = `🟢 ${active} staff loaded`;
-  } catch (e) {
-    console.error(e);
-    el.innerText = "⚠️ Failed to load status";
-  }
-}
-
-// ---------------- INIT (CRITICAL FLOW) ----------------
+// ---------------- INIT ----------------
 
 (async () => {
   const auth = await verifyAccess();
@@ -116,7 +78,7 @@ async function loadStatus() {
 
   setupNav(auth.isWebAdmin === true);
 
-  await loadStatus();
+  const dash = await loadDashboard();
 
   const staff = await post("getStaff");
 
@@ -125,13 +87,13 @@ async function loadStatus() {
   }
 
   if (document.getElementById("notesList")) {
-    loadNotes(staff);
+    loadNotes(staff, dash);
   }
 })();
 
 // ---------------- RATINGS ----------------
 
-async function loadRatings(staff) {
+function loadRatings(staff) {
   const container = document.getElementById("staffList");
   if (!container) return;
 
@@ -143,7 +105,7 @@ async function loadRatings(staff) {
     const div = document.createElement("div");
     div.className = "card";
 
-    if (s.discordId == userId) {
+    if (s.discordId === userId) {
       div.innerHTML = `<b>${s.name} (You)</b>`;
     } else {
       div.innerHTML = `
@@ -167,78 +129,53 @@ async function loadRatings(staff) {
   });
 }
 
-// ---------------- SAVE RATINGS ----------------
+// ---------------- NOTES (LOCKED LOGIC) ----------------
 
-async function saveRatings() {
-  const selects = document.querySelectorAll("select");
-
-  let ratings = [];
-
-  selects.forEach(s => {
-    const id = s.dataset.id;
-    if (!id) return;
-
-    const comment =
-      document.querySelector(`[data-comment='${id}']`)?.value || "";
-
-    ratings.push({
-      targetId: id,
-      rating: s.value,
-      comment
-    });
-  });
-
-  await post("saveRatings", {
-    reviewerId: userId,
-    token: token,
-    month: month(),
-    ratings
-  });
-
-  alert("Saved!");
-}
-
-// ---------------- NOTES ----------------
-
-async function loadNotes(staff) {
+function loadNotes(staff, dash) {
   const container = document.getElementById("notesList");
   if (!container) return;
 
   container.innerHTML = "";
 
+  const locked = !dash.allComplete;
+
   staff.forEach(s => {
-    if (!s.isActive || s.discordId == userId) return;
+    if (!s.isActive || s.discordId === userId) return;
 
     const div = document.createElement("div");
     div.className = "card";
 
-    div.innerHTML = `
-      <img src="${s.avatarURL}">
-      <b>${s.name}</b>
+    if (locked) {
+      div.innerHTML = `<b>${s.name}</b><p>🔒 Locked until all ratings are completed</p>`;
+    } else {
+      div.innerHTML = `
+        <img src="${s.avatarURL}">
+        <b>${s.name}</b>
 
-      <button onclick="sendNote('${s.discordId}','positive')">👍</button>
-      <button onclick="sendNote('${s.discordId}','negative')">👎</button>
+        <button onclick="sendNote('${s.discordId}','positive')">👍</button>
+        <button onclick="sendNote('${s.discordId}','negative')">👎</button>
 
-      <textarea id="n-${s.discordId}" placeholder="Note"></textarea>
-    `;
+        <textarea id="n-${s.discordId}" placeholder="Note"></textarea>
+      `;
+    }
 
     container.appendChild(div);
   });
 }
 
-// ---------------- SEND NOTE ----------------
+// ---------------- SAVE NOTE ----------------
 
 async function sendNote(id, type) {
   const note = document.getElementById(`n-${id}`).value;
 
   await post("saveNote", {
     authorId: userId,
-    token: token,
+    token,
     targetId: id,
     type,
     note,
     month: month()
   });
 
-  alert("Saved note!");
+  alert("Saved!");
 }
