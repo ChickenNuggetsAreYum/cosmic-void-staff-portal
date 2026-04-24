@@ -299,6 +299,7 @@ function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminV
 
   panel.innerHTML = `
     <div class="details-panel">
+      <button type="button" class="details-close" aria-label="Close">✕</button>
       <div class="details-tabs">
         <button type="button" class="details-tab-button ${activeTab === "Ratings" ? "active" : ""}" data-tab="Ratings">Ratings</button>
         <button type="button" class="details-tab-button ${activeTab === "Notes" ? "active" : ""}" data-tab="Notes">Notes</button>
@@ -348,6 +349,18 @@ function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminV
   panel.querySelector("#saveDetailsNote")?.addEventListener("click", async () => {
     await saveNote(staff.discordId, adminView);
   });
+
+  panel.querySelector(".details-close")?.addEventListener("click", () => {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+  });
+
+  panel.onclick = (e) => {
+    if (e.target === panel) {
+      panel.classList.add("hidden");
+      panel.innerHTML = "";
+    }
+  };
 }
 
 async function loadAdmin() {

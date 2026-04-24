@@ -176,12 +176,48 @@ button:hover {
   margin-top: 10px;
 }
 
-.details-panel,
+#detailsPanel,
 #adminDetail {
-  background: #111827;
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
   padding: 20px;
-  border-radius: 12px;
-  margin-top: 20px;
+  z-index: 999;
+}
+
+#detailsPanel:not(.hidden),
+#adminDetail:not(.hidden) {
+  display: flex;
+}
+
+.details-panel {
+  width: 100%;
+  max-width: 760px;
+  max-height: calc(100vh - 60px);
+  background: #111827;
+  padding: 24px;
+  border-radius: 18px;
+  position: relative;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  overflow-y: auto;
+}
+
+.details-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.details-close:hover {
+  color: white;
 }
 
 .details-tabs {
