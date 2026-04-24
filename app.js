@@ -21,7 +21,7 @@ async function post(action, data = {}) {
     const text = await res.text();
 
     if (!text || !text.trim().startsWith("{")) {
-      throw new Error("Invalid server response: " + text);
+      throw new Error("Bad API response: " + text);
     }
 
     return JSON.parse(text);
@@ -29,20 +29,6 @@ async function post(action, data = {}) {
   } catch (e) {
     console.error("API ERROR:", action, e);
     return null;
-  }
-}
-
-// ---------------- VERIFY ----------------
-
-async function verify() {
-  const res = await post("verifyUser", {
-    discordId: userId,
-    token
-  });
-
-  if (!res?.valid) {
-    document.body.innerHTML = "❌ Unauthorized";
-    throw new Error("Unauthorized");
   }
 }
 
@@ -56,6 +42,20 @@ function setLoading(state) {
   if (box) box.style.display = state ? "none" : "block";
 }
 
+// ---------------- VERIFY ----------------
+
+async function verify() {
+  const res = await post("verifyUser", {
+    discordId: userId,
+    token
+  });
+
+  if (!res || !res.valid) {
+    document.body.innerHTML = "❌ Unauthorized";
+    throw new Error("Unauthorized");
+  }
+}
+
 // ---------------- LOAD REVIEWS ----------------
 
 async function loadReviews() {
@@ -67,28 +67,31 @@ async function loadReviews() {
     return;
   }
 
-  // safety timeout (ONLY ONCE, not inside flow)
-  const timeout = setTimeout(() => {
-    setLoading(false);
-    if (box.innerHTML === "") {
-      box.innerHTML = "⚠️ Loading timed out. Please refresh.";
-    }
-  }, 10000);
+  let staff = null;
+  let existing = null;
 
-  const staff = await post("getStaff");
-  const existing = await post("getRatings", { month: month() });
+  try {
+    staff = await post("getStaff");
+    existing = await post("getRatings", { month: month() });
 
-  if (!Array.isArray(staff) || !Array.isArray(existing)) {
-    clearTimeout(timeout);
+    if (!Array.isArray(staff)) throw new Error("Staff invalid");
+    if (!Array.isArray(existing)) throw new Error("Ratings invalid");
+
+  } catch (e) {
+    console.error("LOAD ERROR:", e);
+    box.innerHTML = "❌ Failed to load staff data";
     setLoading(false);
-    box.innerHTML = "⚠️ Failed to load data from server.";
     return;
   }
 
   box.innerHTML = "";
 
+  let rendered = false;
+
   staff.forEach(s => {
     if (!s.isActive) return;
+
+    rendered = true;
 
     const isYou = String(s.discordId) === String(userId);
 
@@ -122,15 +125,18 @@ async function loadReviews() {
     box.appendChild(div);
   });
 
+  if (!rendered) {
+    box.innerHTML = "⚠️ No staff available";
+  }
+
   document.querySelectorAll("select, textarea").forEach(el => {
     el.addEventListener("change", saveReviews);
   });
 
-  clearTimeout(timeout);
   setLoading(false);
 }
 
-// ---------------- SAVE ----------------
+// ---------------- SAVE REVIEWS ----------------
 
 async function saveReviews() {
   const ratings = [];
