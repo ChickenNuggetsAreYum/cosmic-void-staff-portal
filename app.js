@@ -8,39 +8,33 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- SAFE API WRAPPER ----------------
+// ---------------- API WRAPPER ----------------
 
 async function post(action, data = {}) {
+  const res = await fetch(API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ action, ...data })
+  });
+
+  const text = await res.text();
+
   try {
-    const res = await fetch(API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ action, ...data })
-    });
-
-    const text = await res.text();
-
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error("Non-JSON response from server:", text);
-      throw new Error("Invalid server response");
-    }
-
-  } catch (err) {
-    console.error("Fetch error:", err);
-    throw err;
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Bad API response:", text);
+    throw new Error("Invalid server response");
   }
 }
 
-// ---------------- AUTH CHECK (BLOCK ACCESS) ----------------
+// ---------------- AUTH ----------------
 
 async function verifyAccess() {
   if (!userId || !token) {
     document.body.innerHTML = "<h2>❌ Missing credentials</h2>";
-    return false;
+    return null;
   }
 
   try {
@@ -51,22 +45,37 @@ async function verifyAccess() {
 
     if (!res || res.valid !== true) {
       document.body.innerHTML = "<h2>❌ Invalid or expired login</h2>";
-      return false;
+      return null;
     }
 
-    return res; // contains isWebAdmin
+    return res;
   } catch (e) {
+    console.error(e);
     document.body.innerHTML = "<h2>❌ Unable to verify access</h2>";
-    return false;
+    return null;
   }
 }
 
-// ---------------- NAV SETUP ----------------
+// ---------------- NAV ----------------
 
 function setupNav(isAdmin) {
+  const nav = document.querySelector(".nav");
+  const adminLink = document.getElementById("adminLink");
+
+  // prevent flash
+  if (nav) nav.style.visibility = "visible";
+
+  if (adminLink) {
+    if (isAdmin) {
+      adminLink.style.display = "inline-block";
+      adminLink.href = `admin.html?id=${userId}&token=${token}`;
+    } else {
+      adminLink.style.display = "none";
+    }
+  }
+
   const ratingsLink = document.getElementById("ratingsLink");
   const notesLink = document.getElementById("notesLink");
-  const adminLink = document.getElementById("adminLink");
 
   if (ratingsLink) {
     ratingsLink.href = `ratings.html?id=${userId}&token=${token}`;
@@ -75,24 +84,39 @@ function setupNav(isAdmin) {
   if (notesLink) {
     notesLink.href = `notes.html?id=${userId}&token=${token}`;
   }
+}
 
-  if (adminLink) {
-    if (isAdmin) {
-      adminLink.href = `admin.html?id=${userId}&token=${token}`;
-      adminLink.style.display = "inline-block";
-    } else {
-      adminLink.style.display = "none";
-    }
+// ---------------- STATUS ----------------
+
+async function loadStatus() {
+  const el = document.getElementById("statusText");
+  if (!el) return;
+
+  el.innerText = "Loading...";
+
+  try {
+    const staff = await post("getStaff");
+
+    if (!Array.isArray(staff)) throw new Error("Bad staff data");
+
+    const active = staff.filter(s => s.isActive === true).length;
+
+    el.innerText = `🟢 ${active} staff loaded`;
+  } catch (e) {
+    console.error(e);
+    el.innerText = "⚠️ Failed to load status";
   }
 }
 
-// ---------------- INIT FLOW ----------------
+// ---------------- INIT (CRITICAL FLOW) ----------------
 
 (async () => {
   const auth = await verifyAccess();
   if (!auth) return;
 
   setupNav(auth.isWebAdmin === true);
+
+  await loadStatus();
 
   const staff = await post("getStaff");
 
@@ -109,6 +133,8 @@ function setupNav(isAdmin) {
 
 async function loadRatings(staff) {
   const container = document.getElementById("staffList");
+  if (!container) return;
+
   container.innerHTML = "";
 
   staff.forEach(s => {
@@ -141,8 +167,11 @@ async function loadRatings(staff) {
   });
 }
 
+// ---------------- SAVE RATINGS ----------------
+
 async function saveRatings() {
   const selects = document.querySelectorAll("select");
+
   let ratings = [];
 
   selects.forEach(s => {
@@ -173,6 +202,8 @@ async function saveRatings() {
 
 async function loadNotes(staff) {
   const container = document.getElementById("notesList");
+  if (!container) return;
+
   container.innerHTML = "";
 
   staff.forEach(s => {
@@ -194,6 +225,8 @@ async function loadNotes(staff) {
     container.appendChild(div);
   });
 }
+
+// ---------------- SEND NOTE ----------------
 
 async function sendNote(id, type) {
   const note = document.getElementById(`n-${id}`).value;
