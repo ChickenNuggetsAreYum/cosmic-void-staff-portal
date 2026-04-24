@@ -6,14 +6,19 @@
 
 <body class="app">
 
+<!-- LOADING SCREEN (BLOCKS EVERYTHING) -->
+<div id="loadingScreen">
+  <div class="loader">Loading Cosmic Void Staff Portal...</div>
+</div>
+
+<!-- APP (HIDDEN UNTIL READY) -->
 <div id="app" class="layout hidden">
 
   <!-- SIDEBAR -->
   <div class="sidebar">
-    <div class="title">Cosmic Void</div>
+    <div class="title">Cosmic Void Staff</div>
 
-    <div class="channel active" data-tab="home"># home</div>
-    <div class="channel" data-tab="ratings"># ratings</div>
+    <div class="channel active" data-tab="ratings"># ratings</div>
     <div class="channel" data-tab="notes"># notes</div>
     <div class="channel" id="adminTab" data-tab="admin"># admin</div>
   </div>
@@ -21,23 +26,21 @@
   <!-- MAIN -->
   <div class="main">
 
-    <div id="home" class="tab">
-      <h2>Home</h2>
-      <div id="statusText"></div>
-    </div>
-
-    <div id="ratings" class="tab hidden">
-      <h2>Ratings</h2>
+    <!-- RATINGS -->
+    <div id="ratings" class="tab">
+      <h2>Monthly Ratings</h2>
       <div id="staffRatings"></div>
     </div>
 
+    <!-- NOTES (NOW SHOWS HISTORY) -->
     <div id="notes" class="tab hidden">
-      <h2>Notes</h2>
-      <div id="staffNotes"></div>
+      <h2>Your Notes (This Month)</h2>
+      <div id="notesHistory"></div>
     </div>
 
+    <!-- ADMIN -->
     <div id="admin" class="tab hidden">
-      <h2>Admin</h2>
+      <h2>Admin Panel</h2>
       <div id="adminPanel"></div>
     </div>
 

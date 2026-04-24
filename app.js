@@ -4,7 +4,7 @@ const params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
-let staffData = [];
+let staffCache = [];
 
 function month() {
   return new Date().toISOString().slice(0, 7);
@@ -22,7 +22,7 @@ async function post(action, data = {}) {
   return res.json();
 }
 
-// ---------------- AUTH (NO FLASH) ----------------
+// ---------------- AUTH (NO FLASH EVER) ----------------
 
 async function verify() {
   if (!userId || !token) {
@@ -40,8 +40,6 @@ async function verify() {
     throw new Error();
   }
 
-  document.getElementById("app").classList.remove("hidden");
-
   if (!res.isWebAdmin) {
     document.getElementById("adminTab").style.display = "none";
   }
@@ -49,72 +47,55 @@ async function verify() {
   return res;
 }
 
-// ---------------- TAB SYSTEM (FIXED ACTIVE STATE) ----------------
+// ---------------- TAB SYSTEM ----------------
 
 function setupTabs() {
-  document.querySelectorAll(".channel").forEach(btn => {
-    btn.onclick = () => {
+  document.querySelectorAll(".channel").forEach(tab => {
+    tab.onclick = () => {
       document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
-
       document.querySelectorAll(".channel").forEach(c => c.classList.remove("active"));
 
-      btn.classList.add("active");
-
-      document.getElementById(btn.dataset.tab).classList.remove("hidden");
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.tab).classList.remove("hidden");
     };
   });
 }
 
-// ---------------- HOME ----------------
-
-async function loadHome() {
-  const res = await post("getDashboardStatus", { month: month() });
-
-  document.getElementById("statusText").innerText =
-    `📊 ${res.completed} / ${res.totalStaff} completed`;
-}
-
-// ---------------- RATINGS (AUTO SAVE) ----------------
+// ---------------- RATINGS ----------------
 
 async function loadRatings() {
-  staffData = await post("getStaff");
+  staffCache = await post("getStaff");
 
   const c = document.getElementById("staffRatings");
   c.innerHTML = "";
 
-  staffData.forEach(s => {
-    if (!s.isActive) return;
-
-    const isYou = s.discordId === userId;
+  staffCache.forEach(s => {
+    if (!s.isActive || s.discordId === userId) return;
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
       <img src="${s.avatarURL}">
-
       <div style="flex:1">
-        <b>${s.name} ${isYou ? "(You)" : ""}</b>
+        <b>${s.name}</b>
 
-        ${isYou ? `<div style="opacity:.7">This is you!</div>` : `
-          <select data-id="${s.discordId}">
-            <option>Excels</option>
-            <option>On Par</option>
-            <option>Meets Standards</option>
-            <option>Below Par</option>
-            <option>Needs Work</option>
-            <option>N/A</option>
-          </select>
+        <select data-id="${s.discordId}">
+          <option>Excels</option>
+          <option>On Par</option>
+          <option>Meets Standards</option>
+          <option>Below Par</option>
+          <option>Needs Work</option>
+          <option>N/A</option>
+        </select>
 
-          <textarea data-id="${s.discordId}" placeholder="Comment"></textarea>
-        `}
+        <textarea data-id="${s.discordId}" placeholder="Comment"></textarea>
       </div>
     `;
 
     c.appendChild(div);
   });
 
-  // auto-save (no button)
   document.querySelectorAll("select, textarea").forEach(el => {
     el.onchange = saveRatings;
   });
@@ -142,57 +123,46 @@ async function saveRatings() {
   });
 }
 
-// ---------------- NOTES ----------------
+// ---------------- NOTES (WITH HISTORY) ----------------
 
 async function loadNotes() {
-  const c = document.getElementById("staffNotes");
-  const staff = staffData.length ? staffData : await post("getStaff");
+  const notes = await post("getNotes", {
+    authorId: userId,
+    month: month()
+  });
 
+  const c = document.getElementById("notesHistory");
   c.innerHTML = "";
 
-  staff.forEach(s => {
-    if (!s.isActive || s.discordId === userId) return;
+  if (!notes.length) {
+    c.innerHTML = "<p>No notes this month.</p>";
+    return;
+  }
 
+  notes.forEach(n => {
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL}">
-      <div style="flex:1">
-        <b>${s.name}</b>
-
-        <button onclick="sendNote('${s.discordId}','up')">👍</button>
-        <button onclick="sendNote('${s.discordId}','down')">👎</button>
-
-        <textarea id="n-${s.discordId}" placeholder="Add note"></textarea>
-      </div>
+      <b>${n.targetId}</b><br>
+      ${n.type === "positive" ? "👍" : "👎"}<br>
+      ${n.note}
     `;
 
     c.appendChild(div);
   });
 }
 
-async function sendNote(id, type) {
-  const note = document.getElementById(`n-${id}`).value;
-
-  await post("saveNote", {
-    authorId: userId,
-    token,
-    targetId: id,
-    type,
-    note,
-    month: month()
-  });
-}
-
-// ---------------- INIT (CRITICAL ORDER FIX) ----------------
+// ---------------- INIT (ORDER FIX = NO LOADING BUGS) ----------------
 
 (async () => {
   await verify();
 
   setupTabs();
 
-  await loadHome();
   await loadRatings();
   await loadNotes();
+
+  document.getElementById("loadingScreen").style.display = "none";
+  document.getElementById("app").classList.remove("hidden");
 })();
