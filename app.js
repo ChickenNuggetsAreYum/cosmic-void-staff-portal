@@ -5,27 +5,84 @@ const userId = params.get("id");
 const token = params.get("token");
 
 function month() {
-  return new Date().toISOString().slice(0,7);
+  return new Date().toISOString().slice(0, 7);
 }
 
 function post(action, data = {}) {
   return fetch(API, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, ...data })
   }).then(r => r.json());
 }
 
-// ---------------- NAV ----------------
+// ---------------- SECURITY CHECK (IMPORTANT) ----------------
 
-if (document.getElementById("ratingsLink")) {
-  document.getElementById("ratingsLink").href = `ratings.html?id=${userId}&token=${token}`;
-  document.getElementById("notesLink").href = `notes.html?id=${userId}&token=${token}`;
-  document.getElementById("adminLink").href = `admin.html?id=${userId}&token=${token}`;
+async function verifyAccess() {
+  if (!userId || !token) {
+    document.body.innerHTML = "<h2>❌ Access denied (missing credentials)</h2>";
+    return false;
+  }
+
+  try {
+    const res = await post("verifyUser", {
+      discordId: userId,
+      token: token
+    });
+
+    if (!res || !res.valid) {
+      document.body.innerHTML = "<h2>❌ Invalid or expired token</h2>";
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    document.body.innerHTML = "<h2>❌ Unable to verify access</h2>";
+    return false;
+  }
 }
 
-// ---------------- RATINGS ----------------
+// ---------------- NAV ----------------
 
-if (document.getElementById("staffList")) loadRatings();
+function setupNav(isAdmin) {
+  const ratingsLink = document.getElementById("ratingsLink");
+  const notesLink = document.getElementById("notesLink");
+  const adminLink = document.getElementById("adminLink");
+
+  if (ratingsLink) {
+    ratingsLink.href = `ratings.html?id=${userId}&token=${token}`;
+  }
+
+  if (notesLink) {
+    notesLink.href = `notes.html?id=${userId}&token=${token}`;
+  }
+
+  if (adminLink) {
+    if (isAdmin) {
+      adminLink.href = `admin.html?id=${userId}&token=${token}`;
+      adminLink.style.display = "inline-block";
+    } else {
+      adminLink.style.display = "none";
+    }
+  }
+}
+
+// ---------------- INIT ----------------
+
+(async () => {
+  const ok = await verifyAccess();
+  if (!ok) return;
+
+  const staff = await post("getStaff");
+  const me = staff.find(s => s.discordId == userId);
+
+  setupNav(me?.isWebAdmin === true);
+
+  if (document.getElementById("staffList")) loadRatings();
+  if (document.getElementById("notesList")) loadNotes();
+})();
+
+// ---------------- RATINGS ----------------
 
 async function loadRatings() {
   const staff = await post("getStaff");
@@ -63,12 +120,14 @@ async function loadRatings() {
 
 async function saveRatings() {
   const selects = document.querySelectorAll("select");
-
   let ratings = [];
 
   selects.forEach(s => {
     const id = s.dataset.id;
-    const comment = document.querySelector(`[data-comment='${id}']`)?.value || "";
+    if (!id) return;
+
+    const comment =
+      document.querySelector(`[data-comment='${id}']`)?.value || "";
 
     ratings.push({
       targetId: id,
@@ -87,8 +146,6 @@ async function saveRatings() {
 }
 
 // ---------------- NOTES ----------------
-
-if (document.getElementById("notesList")) loadNotes();
 
 async function loadNotes() {
   const staff = await post("getStaff");
