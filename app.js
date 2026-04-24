@@ -1,42 +1,50 @@
 const API = "https://remoteworker23.jeoliver1fan.workers.dev/";
 
-const params = new URLSearchParams(window.location.search);
+ params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
 const token = params.get("token");
-
-let staffCache = [];
 
 function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- API ----------------
+// ---------------- SAFE FETCH ----------------
 
 async function post(action, data = {}) {
-  const res = await fetch(API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...data })
-  });
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data })
+    });
 
-  return res.json();
+    return await res.json();
+  } catch (err) {
+    console.error("API error:", err);
+    return null;
+  }
 }
 
 // ---------------- AUTH ----------------
 
 async function verify() {
+  if (!userId || !token) {
+    throw new Error("Missing credentials");
+  }
+
   const res = await post("verifyUser", {
     discordId: userId,
     token
   });
 
-  if (!res.valid) {
-    document.body.innerHTML = "❌ Unauthorized";
-    throw new Error();
+  if (!res || !res.valid) {
+    throw new Error("Unauthorized");
   }
 
-  if (!res.isWebAdmin) {
-    document.getElementById("adminTab").style.display = "none";
+  // hide admin safely (no flicker)
+  const adminTab = document.getElementById("adminTab");
+  if (adminTab && !res.isWebAdmin) {
+    adminTab.style.display = "none";
   }
 
   return res;
@@ -45,26 +53,33 @@ async function verify() {
 // ---------------- TABS ----------------
 
 function setupTabs() {
-  document.querySelectorAll(".channel").forEach(t => {
-    t.onclick = () => {
-      document.querySelectorAll(".tab").forEach(x => x.classList.add("hidden"));
+  document.querySelectorAll(".channel").forEach(tab => {
+    tab.addEventListener("click", () => {
+      const target = tab.dataset.tab;
+
+      document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
       document.querySelectorAll(".channel").forEach(c => c.classList.remove("active"));
 
-      t.classList.add("active");
-      document.getElementById(t.dataset.tab).classList.remove("hidden");
-    };
+      tab.classList.add("active");
+
+      const el = document.getElementById(target);
+      if (el) el.classList.remove("hidden");
+    });
   });
 }
 
 // ---------------- RATINGS ----------------
 
 async function loadRatings() {
-  staffCache = await post("getStaff");
+  const container = document.getElementById("staffRatings");
+  if (!container) return;
 
-  const c = document.getElementById("staffRatings");
-  c.innerHTML = "";
+  const staff = await post("getStaff");
+  if (!staff) return;
 
-  staffCache.forEach(s => {
+  container.innerHTML = "";
+
+  staff.forEach(s => {
     if (!s.isActive) return;
 
     const isYou = s.discordId === userId;
@@ -73,11 +88,11 @@ async function loadRatings() {
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL}">
+      <img src="${s.avatarURL || ''}">
       <div style="flex:1">
-        <b>${s.name} ${isYou ? "(You)" : ""}</b>
+        <b>${s.name || "Unknown"} ${isYou ? "(You)" : ""}</b>
 
-        ${isYou ? `<div>📌 This is you!</div>` : `
+        ${isYou ? `<div style="opacity:.7">This is you</div>` : `
           <select data-id="${s.discordId}">
             <option>Excels</option>
             <option>On Par</option>
@@ -87,30 +102,32 @@ async function loadRatings() {
             <option>N/A</option>
           </select>
 
-          <textarea data-id="${s.discordId}"></textarea>
+          <textarea data-id="${s.discordId}" placeholder="Comment"></textarea>
         `}
       </div>
     `;
 
-    c.appendChild(div);
+    container.appendChild(div);
   });
 
-  document.querySelectorAll("select, textarea").forEach(x => {
-    x.onchange = saveRatings;
+  document.querySelectorAll("select, textarea").forEach(el => {
+    el.addEventListener("change", saveRatings);
   });
 }
 
 async function saveRatings() {
   const ratings = [];
 
-  document.querySelectorAll("select").forEach(s => {
-    const id = s.dataset.id;
+  document.querySelectorAll("select").forEach(sel => {
+    const id = sel.dataset.id;
     if (!id) return;
+
+    const commentEl = document.querySelector(`textarea[data-id="${id}"]`);
 
     ratings.push({
       targetId: id,
-      rating: s.value,
-      comment: document.querySelector(`textarea[data-id="${id}"]`)?.value || ""
+      rating: sel.value,
+      comment: commentEl ? commentEl.value : ""
     });
   });
 
@@ -125,13 +142,18 @@ async function saveRatings() {
 // ---------------- NOTES ----------------
 
 async function loadNotes() {
+  const container = document.getElementById("staffNotes");
+  if (!container) return;
+
   const data = await post("getNotes", {
     month: month(),
-    authorId: userId
+    authorId: userId,
+    token
   });
 
-  const c = document.getElementById("staffNotes");
-  c.innerHTML = "";
+  if (!data) return;
+
+  container.innerHTML = "";
 
   for (const targetId in data) {
     const notes = data[targetId];
@@ -141,59 +163,78 @@ async function loadNotes() {
 
     div.innerHTML = `
       <b>${targetId}</b><br>
-      ${notes.map(n => `• ${n.note}`).join("<br>")}
+      ${notes.map(n => `• ${n.note || ""}`).join("<br>")}
     `;
 
-    c.appendChild(div);
+    container.appendChild(div);
   }
 }
 
 // ---------------- ADMIN ----------------
 
 async function loadAdmin() {
-  const months = await post("getAvailableMonths");
-  const latest = months[0];
-
-  const data = await post("getAdminMonthData", {
-    month: latest
-  });
+  const panel = document.getElementById("adminPanel");
+  if (!panel) return;
 
   const staff = await post("getStaff");
+  const ratings = await post("getRatings", {
+    month: month(),
+    reviewerId: userId,
+    token
+  });
 
-  const c = document.getElementById("adminPanel");
-  c.innerHTML = "";
+  const notes = await post("getNotes", {
+    month: month(),
+    authorId: userId,
+    token
+  });
+
+  if (!staff) return;
+
+  panel.innerHTML = "";
 
   staff.forEach(s => {
     if (!s.isActive) return;
 
-    const r = data.ratings.filter(x => x.targetId === s.discordId);
-    const n = data.notes[s.discordId] || [];
+    const r = (ratings || []).filter(x => x.targetId === s.discordId);
+    const n = (notes || {})[s.discordId] || [];
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL}">
+      <img src="${s.avatarURL || ''}">
       <div style="flex:1">
         <b>${s.name}</b><br>
         Rating: ${r[0]?.rating || "N/A"}<br><br>
-
         Notes:<br>
         ${n.map(x => `• ${x.note}`).join("<br>") || "None"}
       </div>
     `;
 
-    c.appendChild(div);
+    panel.appendChild(div);
   });
 }
 
-// ---------------- INIT ----------------
+// ---------------- INIT (NO FREEZES EVER) ----------------
 
 (async () => {
-  await verify();
-  setupTabs();
+  try {
+    await verify();
+    setupTabs();
 
-  await loadRatings();
-  await loadNotes();
-  await loadAdmin();
+    await loadRatings();
+    await loadNotes();
+    await loadAdmin();
+
+  } catch (err) {
+    console.error(err);
+    document.body.innerHTML = "❌ Failed to load Cosmic Void Staff Portal";
+  } finally {
+    const loader = document.getElementById("loadingScreen");
+    const app = document.getElementById("app");
+
+    if (loader) loader.style.display = "none";
+    if (app) app.classList.remove("hidden");
+  }
 })();
