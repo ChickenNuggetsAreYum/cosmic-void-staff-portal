@@ -1,6 +1,6 @@
 const API = "https://remoteworker23.jeoliver1fan.workers.dev/";
 
- params = new URLSearchParams(window.location.search);
+const params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
 const token = params.get("token");
 
@@ -8,110 +8,72 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- SAFE FETCH ----------------
-
 async function post(action, data = {}) {
-  try {
-    const res = await fetch(API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...data })
-    });
+  const res = await fetch(API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...data })
+  });
 
-    return await res.json();
-  } catch (err) {
-    console.error("API error:", err);
-    return null;
-  }
+  return res.json();
 }
 
 // ---------------- AUTH ----------------
 
+let isAdmin = false;
+
 async function verify() {
-  if (!userId || !token) {
-    throw new Error("Missing credentials");
-  }
+  const res = await post("verifyUser", { discordId: userId, token });
 
-  const res = await post("verifyUser", {
-    discordId: userId,
-    token
-  });
-
-  if (!res || !res.valid) {
+  if (!res.valid) {
+    document.body.innerHTML = "❌ Unauthorized";
     throw new Error("Unauthorized");
   }
 
-  // hide admin safely (no flicker)
-  const adminTab = document.getElementById("adminTab");
-  if (adminTab && !res.isWebAdmin) {
-    adminTab.style.display = "none";
+  isAdmin = res.isWebAdmin || false;
+
+  if (!isAdmin) {
+    const admin = document.getElementById("adminTab");
+    if (admin) admin.style.display = "none";
   }
-
-  return res;
-}
-
-// ---------------- TABS ----------------
-
-function setupTabs() {
-  document.querySelectorAll(".channel").forEach(tab => {
-    tab.addEventListener("click", () => {
-      const target = tab.dataset.tab;
-
-      document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
-      document.querySelectorAll(".channel").forEach(c => c.classList.remove("active"));
-
-      tab.classList.add("active");
-
-      const el = document.getElementById(target);
-      if (el) el.classList.remove("hidden");
-    });
-  });
 }
 
 // ---------------- RATINGS ----------------
 
 async function loadRatings() {
-  const container = document.getElementById("staffRatings");
-  if (!container) return;
-
   const staff = await post("getStaff");
-  if (!staff) return;
+  const existing = await post("getRatings", {
+    month: month()
+  });
 
+  const container = document.getElementById("staffRatings");
   container.innerHTML = "";
 
   staff.forEach(s => {
-    if (!s.isActive) return;
+    if (!s.isActive || s.discordId === userId) return;
 
-    const isYou = s.discordId === userId;
+    const my = existing.find(e => e.targetId === s.discordId);
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL || ''}">
-      <div style="flex:1">
-        <b>${s.name || "Unknown"} ${isYou ? "(You)" : ""}</b>
+      <img src="${s.avatarURL}">
+      <b>${s.name}</b>
 
-        ${isYou ? `<div style="opacity:.7">This is you</div>` : `
-          <select data-id="${s.discordId}">
-            <option>Excels</option>
-            <option>On Par</option>
-            <option>Meets Standards</option>
-            <option>Below Par</option>
-            <option>Needs Work</option>
-            <option>N/A</option>
-          </select>
+      <select data-id="${s.discordId}">
+        ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
+          .map(v => `<option ${my?.rating === v ? "selected" : ""}>${v}</option>`).join("")}
+      </select>
 
-          <textarea data-id="${s.discordId}" placeholder="Comment"></textarea>
-        `}
-      </div>
+      <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
     `;
 
     container.appendChild(div);
   });
 
   document.querySelectorAll("select, textarea").forEach(el => {
-    el.addEventListener("change", saveRatings);
+    el.onchange = saveRatings;
   });
 }
 
@@ -120,14 +82,12 @@ async function saveRatings() {
 
   document.querySelectorAll("select").forEach(sel => {
     const id = sel.dataset.id;
-    if (!id) return;
-
-    const commentEl = document.querySelector(`textarea[data-id="${id}"]`);
+    const comment = document.querySelector(`textarea[data-id="${id}"]`)?.value;
 
     ratings.push({
       targetId: id,
       rating: sel.value,
-      comment: commentEl ? commentEl.value : ""
+      comment
     });
   });
 
@@ -142,99 +102,86 @@ async function saveRatings() {
 // ---------------- NOTES ----------------
 
 async function loadNotes() {
-  const container = document.getElementById("staffNotes");
-  if (!container) return;
-
-  const data = await post("getNotes", {
-    month: month(),
-    authorId: userId,
-    token
+  const staff = await post("getStaff");
+  const notes = await post("getNotes", {
+    month: month()
   });
 
-  if (!data) return;
-
+  const container = document.getElementById("staffNotes");
   container.innerHTML = "";
 
-  for (const targetId in data) {
-    const notes = data[targetId];
+  staff.forEach(s => {
+    if (!s.isActive || s.discordId === userId) return;
+
+    const n = notes[s.discordId] || [];
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <b>${targetId}</b><br>
-      ${notes.map(n => `• ${n.note || ""}`).join("<br>")}
+      <b>${s.name}</b>
+
+      ${n.map(x => `<div>${x.type === "positive" ? "👍" : "👎"} ${x.note}</div>`).join("")}
+
+      <textarea data-id="${s.discordId}"></textarea>
+
+      <button onclick="addNote('${s.discordId}','positive')">👍</button>
+      <button onclick="addNote('${s.discordId}','negative')">👎</button>
     `;
 
     container.appendChild(div);
-  }
+  });
+}
+
+async function addNote(id, type) {
+  const text = document.querySelector(`textarea[data-id="${id}"]`)?.value;
+
+  await post("saveNote", {
+    month: month(),
+    authorId: userId,
+    token,
+    targetId: id,
+    type,
+    note: text
+  });
+
+  loadNotes();
 }
 
 // ---------------- ADMIN ----------------
 
 async function loadAdmin() {
-  const panel = document.getElementById("adminPanel");
-  if (!panel) return;
+  const data = await post("getDashboard", { month: month() });
 
-  const staff = await post("getStaff");
-  const ratings = await post("getRatings", {
-    month: month(),
-    reviewerId: userId,
-    token
-  });
+  const container = document.getElementById("adminPanel");
+  container.innerHTML = "";
 
-  const notes = await post("getNotes", {
-    month: month(),
-    authorId: userId,
-    token
-  });
-
-  if (!staff) return;
-
-  panel.innerHTML = "";
-
-  staff.forEach(s => {
-    if (!s.isActive) return;
-
-    const r = (ratings || []).filter(x => x.targetId === s.discordId);
-    const n = (notes || {})[s.discordId] || [];
-
+  data.forEach(s => {
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL || ''}">
-      <div style="flex:1">
-        <b>${s.name}</b><br>
-        Rating: ${r[0]?.rating || "N/A"}<br><br>
-        Notes:<br>
-        ${n.map(x => `• ${x.note}`).join("<br>") || "None"}
-      </div>
+      <b>${s.name}</b><br>
+      Ratings: ${s.ratings}
     `;
 
-    panel.appendChild(div);
+    container.appendChild(div);
   });
 }
 
-// ---------------- INIT (NO FREEZES EVER) ----------------
+// ---------------- INIT ----------------
 
 (async () => {
   try {
     await verify();
-    setupTabs();
-
     await loadRatings();
     await loadNotes();
     await loadAdmin();
 
-  } catch (err) {
-    console.error(err);
-    document.body.innerHTML = "❌ Failed to load Cosmic Void Staff Portal";
+  } catch (e) {
+    console.error(e);
   } finally {
-    const loader = document.getElementById("loadingScreen");
-    const app = document.getElementById("app");
-
-    if (loader) loader.style.display = "none";
-    if (app) app.classList.remove("hidden");
+    document.getElementById("loadingScreen")?.remove();
+    document.getElementById("app")?.classList.remove("hidden");
   }
 })();
