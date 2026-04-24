@@ -54,14 +54,17 @@ async function loadReviews() {
   setLoading(true);
 
   const box = document.getElementById("ratingsBox");
-  if (!box) return;
+  if (!box) {
+    setLoading(false);
+    return;
+  }
 
   const staff = await post("getStaff");
   const existing = await post("getRatings", { month: month() });
 
   if (!staff || !existing) {
+    box.innerHTML = "⚠️ Failed to load staff or ratings";
     setLoading(false);
-    box.innerHTML = "❌ Failed to load data";
     return;
   }
 
