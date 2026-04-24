@@ -1,17 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Panel</title>
-  <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="app">
 
-<h2>Admin Panel</h2>
+<div class="nav">
+  <a id="homeLink">Home</a>
+  <a id="ratingsLink">Ratings</a>
+  <a id="notesLink">Notes</a>
+  <a id="adminLink">Admin</a>
+</div>
 
-<div id="adminBox"></div>
+<h1>Admin Panel</h1>
 
-<button onclick="resetMonth()">Reset Month</button>
+<select id="monthSelect"></select>
+<button onclick="loadAdmin()">Load Month</button>
+
+<div id="adminPanel"></div>
 
 <script src="app.js"></script>
+
+<script>
+async function loadAdmin() {
+  const month = document.getElementById("monthSelect").value;
+
+  const ratings = await post("getRatingsByMonth", { month });
+  const notes = await post("getNotesByMonth", { month });
+
+  const panel = document.getElementById("adminPanel");
+
+  panel.innerHTML = `
+    <h2>Ratings</h2>
+    <pre>${JSON.stringify(ratings, null, 2)}</pre>
+
+    <h2>Notes</h2>
+    <pre>${JSON.stringify(notes, null, 2)}</pre>
+  `;
+}
+</script>
+
 </body>
 </html>

@@ -25,7 +25,7 @@ async function post(action, data = {}) {
 async function verifyAccess() {
   if (!userId || !token) {
     document.body.innerHTML = "<h2>❌ Missing credentials</h2>";
-    return null;
+    throw new Error();
   }
 
   const res = await post("verifyUser", {
@@ -33,35 +33,26 @@ async function verifyAccess() {
     token
   });
 
-  if (!res || res.valid !== true) {
-    document.body.innerHTML = "<h2>❌ Invalid login</h2>";
-    return null;
+  if (!res.valid) {
+    document.body.innerHTML = "<h2>❌ Invalid access</h2>";
+    throw new Error();
   }
 
   return res;
-}
-
-// ---------------- DASHBOARD ----------------
-
-async function loadDashboard() {
-  const el = document.getElementById("statusText");
-  if (!el) return;
-
-  const data = await post("getDashboardStatus", {
-    month: month()
-  });
-
-  el.innerText =
-    `📊 ${data.completed} / ${data.totalStaff} completed`;
-
-  return data;
 }
 
 // ---------------- NAV ----------------
 
 function setupNav(isAdmin) {
   const admin = document.getElementById("adminLink");
-  if (admin) admin.style.display = isAdmin ? "inline-block" : "none";
+
+  if (admin) {
+    admin.style.display = isAdmin ? "inline-block" : "none";
+    admin.href = `admin.html?id=${userId}&token=${token}`;
+  }
+
+  document.getElementById("homeLink").href =
+    `index.html?id=${userId}&token=${token}`;
 
   document.getElementById("ratingsLink").href =
     `ratings.html?id=${userId}&token=${token}`;
@@ -70,34 +61,46 @@ function setupNav(isAdmin) {
     `notes.html?id=${userId}&token=${token}`;
 }
 
+// ---------------- DASHBOARD ----------------
+
+async function loadDashboard() {
+  const el = document.getElementById("statusText");
+  if (!el) return;
+
+  el.innerText = "Loading...";
+
+  const data = await post("getDashboardStatus", {
+    month: month()
+  });
+
+  el.innerText = `📊 ${data.completed} / ${data.totalStaff} completed`;
+
+  return data;
+}
+
 // ---------------- INIT ----------------
 
 (async () => {
   const auth = await verifyAccess();
-  if (!auth) return;
 
-  setupNav(auth.isWebAdmin === true);
+  setupNav(auth.isWebAdmin);
 
   const dash = await loadDashboard();
 
   const staff = await post("getStaff");
 
-  if (document.getElementById("staffList")) {
-    loadRatings(staff);
-  }
-
-  if (document.getElementById("notesList")) {
-    loadNotes(staff, dash);
-  }
+  if (document.getElementById("staffList")) loadRatings(staff);
+  if (document.getElementById("notesList")) loadNotes(staff, dash);
+  if (document.getElementById("adminPanel")) loadAdmin(auth);
 })();
 
 // ---------------- RATINGS ----------------
 
 function loadRatings(staff) {
-  const container = document.getElementById("staffList");
-  if (!container) return;
+  const c = document.getElementById("staffList");
+  if (!c) return;
 
-  container.innerHTML = "";
+  c.innerHTML = "";
 
   staff.forEach(s => {
     if (!s.isActive) return;
@@ -107,35 +110,36 @@ function loadRatings(staff) {
 
     if (s.discordId === userId) {
       div.innerHTML = `<b>${s.name} (You)</b>`;
-    } else {
-      div.innerHTML = `
-        <img src="${s.avatarURL}">
-        <b>${s.name}</b>
-
-        <select data-id="${s.discordId}">
-          <option>Excels</option>
-          <option>On Par</option>
-          <option>Meets Standards</option>
-          <option>Below Par</option>
-          <option>Needs Work</option>
-          <option>N/A</option>
-        </select>
-
-        <textarea data-comment="${s.discordId}" placeholder="Comment"></textarea>
-      `;
+      return;
     }
 
-    container.appendChild(div);
+    div.innerHTML = `
+      <img src="${s.avatarURL}">
+      <b>${s.name}</b>
+
+      <select data-id="${s.discordId}">
+        <option>Excels</option>
+        <option>On Par</option>
+        <option>Meets Standards</option>
+        <option>Below Par</option>
+        <option>Needs Work</option>
+        <option>N/A</option>
+      </select>
+
+      <textarea data-comment="${s.discordId}" placeholder="Comment"></textarea>
+    `;
+
+    c.appendChild(div);
   });
 }
 
-// ---------------- NOTES (LOCKED LOGIC) ----------------
+// ---------------- NOTES ----------------
 
 function loadNotes(staff, dash) {
-  const container = document.getElementById("notesList");
-  if (!container) return;
+  const c = document.getElementById("notesList");
+  if (!c) return;
 
-  container.innerHTML = "";
+  c.innerHTML = "";
 
   const locked = !dash.allComplete;
 
@@ -146,7 +150,7 @@ function loadNotes(staff, dash) {
     div.className = "card";
 
     if (locked) {
-      div.innerHTML = `<b>${s.name}</b><p>🔒 Locked until all ratings are completed</p>`;
+      div.innerHTML = `<b>${s.name}</b><p>🔒 Locked until ratings complete</p>`;
     } else {
       div.innerHTML = `
         <img src="${s.avatarURL}">
@@ -155,15 +159,13 @@ function loadNotes(staff, dash) {
         <button onclick="sendNote('${s.discordId}','positive')">👍</button>
         <button onclick="sendNote('${s.discordId}','negative')">👎</button>
 
-        <textarea id="n-${s.discordId}" placeholder="Note"></textarea>
+        <textarea id="n-${s.discordId}"></textarea>
       `;
     }
 
-    container.appendChild(div);
+    c.appendChild(div);
   });
 }
-
-// ---------------- SAVE NOTE ----------------
 
 async function sendNote(id, type) {
   const note = document.getElementById(`n-${id}`).value;
@@ -177,5 +179,5 @@ async function sendNote(id, type) {
     month: month()
   });
 
-  alert("Saved!");
-}
+  alert("Saved");
+}   
