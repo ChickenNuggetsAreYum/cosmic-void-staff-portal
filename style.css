@@ -1,96 +1,84 @@
-body{
-  margin:0;
-  font-family:Arial;
-  background:#1e1f22;
-  color:white;
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0b0f1a;
+  color: white;
 }
 
-.hidden{display:none}
-
-#app{display:flex;height:100vh}
-
-.sidebar{
-  width:220px;
-  background:#2b2d31;
-  padding:10px;
+.header {
+  text-align: center;
+  padding: 30px 20px;
 }
 
-.channel{
-  padding:10px;
-  cursor:pointer;
-  border-radius:6px;
+.logo {
+  width: 120px;
+  height: 120px;
+  border-radius: 20px;
+  margin-bottom: 10px;
 }
 
-.channel:hover{
-  background:#404249;
+h1 {
+  margin: 0;
+  font-size: 28px;
 }
 
-.main{
-  flex:1;
-  padding:10px;
-  overflow:auto;
+.container {
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
 }
 
-.card{
-  background:#313338;
-  padding:10px;
-  margin:10px 0;
-  border-radius:10px;
-  display:flex;
-  gap:10px;
-  align-items:center;
+.card {
+  background: #111827;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
 }
 
-.pfp{
-  width:40px;
-  height:40px;
-  border-radius:50%;
+.card img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
 }
 
-.you{
-  margin-left:10px;
-  font-size:12px;
-  color:#aaa;
+select, textarea {
+  width: 100%;
+  margin-top: 5px;
+  padding: 6px;
+  border-radius: 6px;
+  border: none;
+  background: #1f2937;
+  color: white;
 }
 
-select,textarea{
-  width:100%;
-  margin-top:5px;
-}
-.card{
-  background:#2b2d31;
-  color:white;
-  border-radius:10px;
-  padding:12px;
-  margin:10px 0;
+button {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-.avatar{
-  width:40px;
-  height:40px;
-  border-radius:50%;
+button:hover {
+  background: #2563eb;
 }
 
-.rating-box select,
-.rating-box textarea{
-  background:#1e1f22;
-  color:white;
-  border:none;
-  padding:8px;
-  border-radius:6px;
-  margin-top:6px;
-  width:100%;
+.menu {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 20px 0;
 }
 
-.you-overlay{
-  background:#111;
-  color:#aaa;
-  padding:8px;
-  border-radius:6px;
-  margin-top:8px;
-  text-align:center;
+.menu a {
+  color: cyan;
+  text-decoration: none;
 }
 
-.tab.hidden{
-  display:none;
+.hidden {
+  display: none;
 }

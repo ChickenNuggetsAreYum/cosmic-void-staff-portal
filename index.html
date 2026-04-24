@@ -1,28 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cosmic Void Staff Portal</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<div id="loading">Loading...</div>
-
-<div id="app" class="hidden">
-
-  <div class="sidebar">
-    <div class="channel" data-tab="ratings"># ratings</div>
-    <div class="channel" data-tab="admin"># admin</div>
+  <div class="header">
+    <img src="https://cdn.discordapp.com/attachments/1433974277350096947/1488346333487169586/CV_easter_icon.png?ex=69ecbeca&is=69eb6d4a&hm=3a0bdce7c531f7f54b7b44e7687d2a168db9792b79a551182c638fc470d118bb&" class="logo">
+    <h1>Cosmic Void</h1>
+    <p>Staff Portal</p>
   </div>
 
-  <div class="main">
+  <div class="menu">
+    <a href="#" data-page="ratings">Ratings</a>
+    <a href="#" data-page="notes">Notes</a>
+  </div>
 
-    <div id="ratings" class="tab"></div>
-    <div id="admin" class="tab hidden"></div>
+  <div class="container">
+
+    <div id="ratingsPage">
+      <h2>Monthly Ratings</h2>
+      <div id="ratingsBox"></div>
+    </div>
+
+    <div id="notesPage" class="hidden">
+      <h2>Staff Notes</h2>
+      <div id="notesBox"></div>
+    </div>
 
   </div>
 
-</div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
