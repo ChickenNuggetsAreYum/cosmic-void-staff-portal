@@ -19,6 +19,7 @@ let RATINGS_CACHE = null;
 let NOTES_CACHE = null;
 let RATINGS_MONTH = null;
 let USER = null;
+let EXPANDED_CARD = null;
 
 // ---------------- API ----------------
 
@@ -95,6 +96,7 @@ function setupNav() {
   }
 
   initAdminControls();
+  setupReviewRefresh();
 }
 
 function setActivePage(page) {
@@ -116,6 +118,7 @@ function setActivePage(page) {
 function initAdminControls() {
   const select = document.getElementById("adminMonthSelect");
   const reload = document.getElementById("adminReload");
+  const refresh = document.getElementById("adminRefresh");
   if (!select || !reload) return;
 
   const values = [];
@@ -128,6 +131,28 @@ function initAdminControls() {
   select.innerHTML = values.map(month => `<option value="${month}">${month}</option>`).join("");
   select.value = month();
   reload.addEventListener("click", loadAdmin);
+  if (refresh) {
+    refresh.addEventListener("click", async () => {
+      STAFF_CACHE = null;
+      RATINGS_CACHE = null;
+      NOTES_CACHE = null;
+      RATINGS_MONTH = null;
+      await loadAdmin();
+    });
+  }
+}
+
+function setupReviewRefresh() {
+  const refreshBtn = document.getElementById("reviewsRefresh");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      STAFF_CACHE = null;
+      RATINGS_CACHE = null;
+      NOTES_CACHE = null;
+      RATINGS_MONTH = null;
+      await loadReviews();
+    });
+  }
 }
 
 // ---------------- LOAD REVIEWS ----------------
@@ -158,6 +183,8 @@ async function loadReviews() {
     return;
   }
 
+  await loadNotesForMonth(currentMonth);
+
   if (spinner) spinner.style.display = "none";
   box.innerHTML = "";
   setActivePage("reviews");
@@ -180,15 +207,22 @@ async function loadReviews() {
 
     const div = document.createElement("div");
     div.className = "card";
+    div.dataset.id = s.discordId;
 
-    div.innerHTML = `
-      <img src="${s.avatarURL || ''}">
-      <div>
-        ${isYou ? `
+    if (isYou) {
+      div.className += " no-click";
+      div.innerHTML = `
+        <img src="${s.avatarURL || ''}">
+        <div class="card-body">
           <b>${s.name}</b>
           <p style="opacity:0.6;">This is you</p>
-        ` : `
-          <button type="button" class="staff-link" data-id="${s.discordId}">${s.name}</button>
+        </div>
+      `;
+    } else {
+      div.innerHTML = `
+        <img src="${s.avatarURL || ''}">
+        <div class="card-body">
+          <b>${s.name}</b>
           <select data-id="${s.discordId}">
             ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
               .map(v => {
@@ -196,171 +230,150 @@ async function loadReviews() {
                 return `<option value="${v}" ${selectedRating === normalized ? "selected" : ""}>${v}</option>`;
               }).join("")}
           </select>
-
           <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
-        `}
-      </div>
-    `;
+        </div>
+        <div class="card-details"></div>
+      `;
+      
+      div.addEventListener("click", async (e) => {
+        if (e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+        
+        if (EXPANDED_CARD === s.discordId) {
+          div.classList.remove("expanded");
+          EXPANDED_CARD = null;
+        } else {
+          if (EXPANDED_CARD) {
+            document.querySelector(`[data-id="${EXPANDED_CARD}"]`)?.classList.remove("expanded");
+          }
+          div.classList.add("expanded");
+          EXPANDED_CARD = s.discordId;
+          await expandStaffCard(s.discordId, div);
+        }
+      });
+    }
 
     box.appendChild(div);
   });
 
   document.querySelectorAll("#reviewsBox select, #reviewsBox textarea")
     .forEach(el => el.addEventListener("change", saveReviews));
+}
 
-  document.querySelectorAll(".staff-link").forEach(el => {
-    el.addEventListener("click", async (e) => {
-      e.preventDefault();
-      await openStaffDetails(el.dataset.id, { adminView: false, tab: "Notes" });
+async function expandStaffCard(targetId, cardEl) {
+  const ratings = (RATINGS_CACHE || []).filter(r => String(r.targetId).trim() === String(targetId).trim());
+  const notes = await getNotesForTarget(targetId);
+  const detailsDiv = cardEl.querySelector(".card-details");
+  
+  if (!detailsDiv) return;
+  
+  detailsDiv.innerHTML = `
+    <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+      <button class="details-tab-button active" data-tab="Ratings">Ratings</button>
+      <button class="details-tab-button" data-tab="Notes">Notes</button>
+      <button type="button" style="margin-left: auto; background: #3b82f6; padding: 6px 10px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 0.9rem;">🔄</button>
+    </div>
+    <div class="details-content" data-tab="Ratings">
+      ${ratings.length ? ratings.map(r => {
+        const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(r.reviewerId).trim());
+        const reviewer_name = reviewer?.name || String(r.reviewerId).trim();
+        if (String(r.reviewerId).trim() === String(userId).trim()) {
+          return `
+            <div class="review-card">
+              <b>Your rating</b>
+              <small>Rating: ${r.rating}</small>
+              <p>${String(r.comment || "").trim() || "No comment."}</p>
+            </div>
+          `;
+        }
+        return "";
+      }).join("") || "<p>You haven't rated yet.</p>"}
+    </div>
+    <div class="details-content" data-tab="Notes" style="display: none;">
+      <label for="noteType${targetId}"><b>Note type</b></label>
+      <select id="noteType${targetId}">
+        <option value="Positive">Positive 👍</option>
+        <option value="Negative">Negative 👎</option>
+      </select>
+      <textarea id="noteInput${targetId}" rows="4"></textarea>
+      <button id="saveNoteBtn${targetId}" style="margin-top: 10px;">Save Note</button>
+      
+      <div style="margin-top: 20px;">
+        <b>All notes</b>
+        ${notes.length ? notes.map(note => {
+          const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(note.reviewerId).trim());
+          const icon = note.type === "Negative" ? "👎" : "👍";
+          return `
+            <div class="note-item">
+              <small>${icon} ${reviewer?.name || note.reviewerId}</small>
+              <p>${String(note.note || "").trim() || "No note."}</p>
+            </div>
+          `;
+        }).join("") : "<p>No notes yet.</p>"}
+      </div>
+    </div>
+  `;
+
+  const myNote = notes.find(n => String(n.reviewerId).trim() === String(userId).trim());
+  if (myNote) {
+    const noteTypeEl = detailsDiv.querySelector(`#noteType${targetId}`);
+    const noteInputEl = detailsDiv.querySelector(`#noteInput${targetId}`);
+    if (noteTypeEl) noteTypeEl.value = myNote.type || "Positive";
+    if (noteInputEl) noteInputEl.value = myNote.note || "";
+  }
+
+  detailsDiv.querySelectorAll(".details-tab-button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      detailsDiv.querySelectorAll(".details-tab-button").forEach(b => b.classList.remove("active"));
+      detailsDiv.querySelectorAll(".details-content").forEach(c => c.style.display = "none");
+      btn.classList.add("active");
+      detailsDiv.querySelector(`[data-tab="${btn.dataset.tab}"]`).style.display = "block";
     });
   });
+
+  detailsDiv.querySelector(`#saveNoteBtn${targetId}`)?.addEventListener("click", async () => {
+    const noteType = detailsDiv.querySelector(`#noteType${targetId}`)?.value || "Positive";
+    const noteText = detailsDiv.querySelector(`#noteInput${targetId}`)?.value || "";
+    
+    await post("saveNotes", {
+      month: month(),
+      reviewerId: userId,
+      targetId,
+      type: noteType,
+      note: noteText.trim()
+    });
+
+    NOTES_CACHE = null;
+    await expandStaffCard(targetId, cardEl);
+  });
+
+  detailsDiv.querySelector("button:last-of-type")?.addEventListener("click", async () => {
+    NOTES_CACHE = null;
+    await expandStaffCard(targetId, cardEl);
+  });
+}
+
+async function loadNotesForMonth(monthValue = month()) {
+  if (NOTES_CACHE?.month === monthValue && NOTES_CACHE.map) {
+    return NOTES_CACHE;
+  }
+
+  const notes = await post("getNotes", { month: monthValue });
+  const normalized = Array.isArray(notes) ? notes : [];
+  const map = normalized.reduce((acc, note) => {
+    const targetId = String(note.targetId || "").trim();
+    if (!targetId) return acc;
+    if (!acc[targetId]) acc[targetId] = [];
+    acc[targetId].push(note);
+    return acc;
+  }, {});
+
+  NOTES_CACHE = { month: monthValue, map };
+  return NOTES_CACHE;
 }
 
 async function getNotesForTarget(targetId, monthValue = month()) {
-  const notes = await post("getNotes", { month: monthValue, targetId });
-  return Array.isArray(notes) ? notes : [];
-}
-
-function renderRatingList(staff, ratings, adminView) {
-  if (!ratings.length) {
-    return `<div class="card"><p>No ratings found for ${staff.name} this month.</p></div>`;
-  }
-
-  const reviewerMap = STAFF_CACHE.reduce((map, s) => {
-    map[String(s.discordId).trim()] = s.name;
-    return map;
-  }, {});
-
-  if (adminView) {
-    return ratings.map(r => {
-      const reviewer = reviewerMap[String(r.reviewerId).trim()] || String(r.reviewerId).trim();
-      return `
-        <div class="review-card">
-          <b>${reviewer}</b>
-          <small>Rating: ${r.rating}</small>
-          <p>${String(r.comment || "").trim() || "No comment."}</p>
-        </div>
-      `;
-    }).join("");
-  }
-
-  const myRating = ratings.find(r => String(r.reviewerId).trim() === String(userId).trim());
-  if (!myRating) {
-    return `<div class="card"><p>You haven't rated ${staff.name} yet.</p></div>`;
-  }
-
-  return `
-    <div class="review-card">
-      <b>Your rating</b>
-      <small>Rating: ${myRating.rating}</small>
-      <p>${String(myRating.comment || "").trim() || "No comment."}</p>
-    </div>
-  `;
-}
-
-async function saveNote(targetId, adminView = false) {
-  const noteInput = document.getElementById("detailsNoteInput");
-  const noteType = document.getElementById("detailsNoteType");
-  if (!noteInput || !noteType) return;
-
-  await post("saveNotes", {
-    month: month(),
-    reviewerId: userId,
-    targetId,
-    type: noteType.value,
-    note: noteInput.value.trim()
-  });
-
-  if (adminView) {
-    await openAdminStaffDetails(targetId);
-  } else {
-    await openStaffDetails(targetId, { adminView: false, tab: "Notes" });
-  }
-}
-
-async function openStaffDetails(targetId, { adminView = false, tab = "Notes" } = {}) {
-  const staff = STAFF_CACHE?.find(s => String(s.discordId).trim() === String(targetId).trim());
-  if (!staff) return;
-
-  const ratings = (RATINGS_CACHE || []).filter(r => String(r.targetId).trim() === String(targetId).trim());
-  const notes = await getNotesForTarget(targetId);
-
-  renderDetailsPanel(staff, { ratings, notes, activeTab: tab, adminView });
-}
-
-function renderDetailsPanel(staff, { ratings, notes, activeTab = "Notes", adminView = false }) {
-  const panel = document.getElementById(adminView ? "adminDetail" : "detailsPanel");
-  if (!panel) return;
-  panel.classList.remove("hidden");
-
-  const noteEntry = notes.find(n => String(n.reviewerId).trim() === String(userId).trim());
-  const noteText = noteEntry?.note || "";
-  const noteTypeValue = noteEntry?.type || "Positive";
-
-  panel.innerHTML = `
-    <div class="details-panel">
-      <button type="button" class="details-close" aria-label="Close">✕</button>
-      <div class="details-tabs">
-        <button type="button" class="details-tab-button ${activeTab === "Ratings" ? "active" : ""}" data-tab="Ratings">Ratings</button>
-        <button type="button" class="details-tab-button ${activeTab === "Notes" ? "active" : ""}" data-tab="Notes">Notes</button>
-      </div>
-
-      <div id="detailsContent">
-        ${activeTab === "Ratings" ? `
-          ${renderRatingList(staff, ratings, adminView)}
-        ` : `
-          <div>
-            <label for="detailsNoteType"><b>${adminView ? "Note type" : "Note type"}</b></label>
-            <select id="detailsNoteType">
-              <option value="Positive" ${noteTypeValue === "Positive" ? "selected" : ""}>Positive 👍</option>
-              <option value="Negative" ${noteTypeValue === "Negative" ? "selected" : ""}>Negative 👎</option>
-            </select>
-
-            <label for="detailsNoteInput"><b>${adminView ? "Add or update a note" : "Your note"}</b></label>
-            <textarea id="detailsNoteInput" rows="5">${noteText}</textarea>
-            <button id="saveDetailsNote">Save Note</button>
-
-            <div style="margin-top:20px;">
-              <b>Existing notes</b>
-              ${notes.length ? notes.map(note => {
-                const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(note.reviewerId).trim());
-                const icon = note.type === "Negative" ? "👎" : "👍";
-                return `
-                  <div class="note-item">
-                    <small>${icon} ${reviewer?.name || note.reviewerId}</small>
-                    <p>${String(note.note || "").trim() || "No note."}</p>
-                  </div>
-                `;
-              }).join("") : "<div class='card'>No notes yet.</div>"}
-            </div>
-          </div>
-        `}
-      </div>
-    </div>
-  `;
-
-  panel.querySelectorAll(".details-tab-button").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const nextTab = btn.dataset.tab;
-      renderDetailsPanel(staff, { ratings, notes, activeTab: nextTab, adminView });
-    });
-  });
-
-  panel.querySelector("#saveDetailsNote")?.addEventListener("click", async () => {
-    await saveNote(staff.discordId, adminView);
-  });
-
-  panel.querySelector(".details-close")?.addEventListener("click", () => {
-    panel.classList.add("hidden");
-    panel.innerHTML = "";
-  });
-
-  panel.onclick = (e) => {
-    if (e.target === panel) {
-      panel.classList.add("hidden");
-      panel.innerHTML = "";
-    }
-  };
+  const cache = await loadNotesForMonth(monthValue);
+  return cache.map[String(targetId).trim()] || [];
 }
 
 async function loadAdmin() {
@@ -373,50 +386,151 @@ async function loadAdmin() {
   }
 
   const monthValue = document.getElementById("adminMonthSelect")?.value || month();
-  const ratings = await post("getRatings", { month: monthValue });
+  if (RATINGS_MONTH !== monthValue) {
+    RATINGS_CACHE = null;
+    RATINGS_MONTH = monthValue;
+  }
+
+  if (!RATINGS_CACHE) {
+    RATINGS_CACHE = await post("getRatings", { month: monthValue });
+  }
+
+  await loadNotesForMonth(monthValue);
+
+  const ratings = RATINGS_CACHE;
   const listBox = document.getElementById("adminList");
-  const detailBox = document.getElementById("adminDetail");
 
   if (!Array.isArray(STAFF_CACHE) || !Array.isArray(ratings)) {
     if (listBox) listBox.innerHTML = "<div class='card'>❌ Failed to load admin data</div>";
-    if (detailBox) detailBox.classList.add("hidden");
     return;
   }
 
   const staffRows = STAFF_CACHE.filter(s => isTrue(s.isActive));
 
   if (listBox) {
-    listBox.innerHTML = staffRows.length ? `<div class="admin-list">${staffRows.map(s => {
+    listBox.innerHTML = staffRows.length ? staffRows.map(s => {
       const count = ratings.filter(r => String(r.targetId).trim() === String(s.discordId).trim()).length;
       return `
-        <div class="staff-card" data-id="${s.discordId}">
-          <b>${s.name}</b>
-          <p>Ratings: ${count}</p>
+        <div class="card" data-id="${s.discordId}">
+          <img src="${s.avatarURL || ''}">
+          <div class="card-body">
+            <b>${s.name}</b>
+            <p>Ratings: ${count}</p>
+          </div>
+          <div class="card-details"></div>
         </div>
       `;
-    }).join("")}</div>` : "<div class='card'>No active staff found.</div>";
+    }).join("") : "<div class='card'>No active staff found.</div>";
   }
 
-  if (detailBox) {
-    detailBox.classList.add("hidden");
-    detailBox.innerHTML = "";
-  }
-
-  document.querySelectorAll(".staff-card").forEach(card => {
-    card.addEventListener("click", async () => {
-      await openAdminStaffDetails(card.dataset.id, monthValue);
+  document.querySelectorAll("#adminList .card").forEach(card => {
+    const staffId = card.dataset.id;
+    card.addEventListener("click", async (e) => {
+      if (e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+      
+      if (EXPANDED_CARD === staffId) {
+        card.classList.remove("expanded");
+        EXPANDED_CARD = null;
+      } else {
+        if (EXPANDED_CARD) {
+          document.querySelector(`#adminList [data-id="${EXPANDED_CARD}"]`)?.classList.remove("expanded");
+        }
+        card.classList.add("expanded");
+        EXPANDED_CARD = staffId;
+        await expandAdminCard(staffId, card, monthValue);
+      }
     });
   });
 }
 
-async function openAdminStaffDetails(targetId, monthValue = month()) {
-  const staff = STAFF_CACHE?.find(s => String(s.discordId).trim() === String(targetId).trim());
-  if (!staff) return;
-
-  const ratings = (await post("getRatings", { month: monthValue }))?.filter(r => String(r.targetId).trim() === String(targetId).trim()) || [];
+async function expandAdminCard(targetId, cardEl, monthValue = month()) {
+  const ratings = (RATINGS_CACHE || []).filter(r => String(r.targetId).trim() === String(targetId).trim());
   const notes = await getNotesForTarget(targetId, monthValue);
+  const detailsDiv = cardEl.querySelector(".card-details");
+  
+  if (!detailsDiv) return;
+  
+  detailsDiv.innerHTML = `
+    <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+      <button class="details-tab-button active" data-tab="Ratings">Ratings</button>
+      <button class="details-tab-button" data-tab="Notes">Notes</button>
+      <button type="button" style="margin-left: auto; background: #3b82f6; padding: 6px 10px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 0.9rem;">🔄</button>
+    </div>
+    <div class="details-content" data-tab="Ratings">
+      ${ratings.length ? ratings.map(r => {
+        const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(r.reviewerId).trim());
+        const reviewer_name = reviewer?.name || String(r.reviewerId).trim();
+        return `
+          <div class="review-card">
+            <b>${reviewer_name}</b>
+            <small>Rating: ${r.rating}</small>
+            <p>${String(r.comment || "").trim() || "No comment."}</p>
+          </div>
+        `;
+      }).join("") : "<p>No ratings yet.</p>"}
+    </div>
+    <div class="details-content" data-tab="Notes" style="display: none;">
+      <label for="noteType${targetId}"><b>Note type</b></label>
+      <select id="noteType${targetId}">
+        <option value="Positive">Positive 👍</option>
+        <option value="Negative">Negative 👎</option>
+      </select>
+      <textarea id="noteInput${targetId}" rows="4"></textarea>
+      <button id="saveAdminNoteBtn${targetId}" style="margin-top: 10px;">Save Note</button>
+      
+      <div style="margin-top: 20px;">
+        <b>All notes</b>
+        ${notes.length ? notes.map(note => {
+          const reviewer = STAFF_CACHE.find(s => String(s.discordId).trim() === String(note.reviewerId).trim());
+          const icon = note.type === "Negative" ? "👎" : "👍";
+          return `
+            <div class="note-item">
+              <small>${icon} ${reviewer?.name || note.reviewerId}</small>
+              <p>${String(note.note || "").trim() || "No note."}</p>
+            </div>
+          `;
+        }).join("") : "<p>No notes yet.</p>"}
+      </div>
+    </div>
+  `;
 
-  renderDetailsPanel(staff, { ratings, notes, activeTab: "Ratings", adminView: true });
+  const myNote = notes.find(n => String(n.reviewerId).trim() === String(userId).trim());
+  if (myNote) {
+    const noteTypeEl = detailsDiv.querySelector(`#noteType${targetId}`);
+    const noteInputEl = detailsDiv.querySelector(`#noteInput${targetId}`);
+    if (noteTypeEl) noteTypeEl.value = myNote.type || "Positive";
+    if (noteInputEl) noteInputEl.value = myNote.note || "";
+  }
+
+  detailsDiv.querySelectorAll(".details-tab-button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      detailsDiv.querySelectorAll(".details-tab-button").forEach(b => b.classList.remove("active"));
+      detailsDiv.querySelectorAll(".details-content").forEach(c => c.style.display = "none");
+      btn.classList.add("active");
+      detailsDiv.querySelector(`[data-tab="${btn.dataset.tab}"]`).style.display = "block";
+    });
+  });
+
+  detailsDiv.querySelector(`#saveAdminNoteBtn${targetId}`)?.addEventListener("click", async () => {
+    const noteType = detailsDiv.querySelector(`#noteType${targetId}`)?.value || "Positive";
+    const noteText = detailsDiv.querySelector(`#noteInput${targetId}`)?.value || "";
+    
+    await post("saveNotes", {
+      month: monthValue,
+      reviewerId: userId,
+      targetId,
+      type: noteType,
+      note: noteText.trim()
+    });
+
+    NOTES_CACHE = null;
+    await expandAdminCard(targetId, cardEl, monthValue);
+  });
+
+  detailsDiv.querySelector("button:last-of-type")?.addEventListener("click", async () => {
+    NOTES_CACHE = null;
+    await expandAdminCard(targetId, cardEl, monthValue);
+  });
 }
 
 // ---------------- SAVE ----------------

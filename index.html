@@ -24,12 +24,14 @@
 
     <div id="reviewsPage">
 
-      <h2 class="center-title">Monthly Ratings</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 class="center-title" style="margin: 0; flex: 1;">Monthly Ratings</h2>
+        <button id="reviewsRefresh" title="Refresh data" style="padding: 8px 12px; cursor: pointer; background: #3b82f6;">🔄 Refresh</button>
+      </div>
 
       <div id="loadingSpinner" class="spinner"></div>
 
       <div id="reviewsBox"></div>
-      <div id="detailsPanel" class="hidden"></div>
 
     </div>
 
@@ -40,10 +42,10 @@
         <label for="adminMonthSelect">Month</label>
         <select id="adminMonthSelect"></select>
         <button id="adminReload">Load Month</button>
+        <button id="adminRefresh" title="Refresh all data">🔄 Refresh</button>
       </div>
 
       <div id="adminList"></div>
-      <div id="adminDetail" class="hidden"></div>
     </div>
 
     <div id="revokedPage" class="hidden">

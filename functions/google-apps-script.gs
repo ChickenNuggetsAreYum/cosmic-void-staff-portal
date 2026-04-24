@@ -169,12 +169,12 @@ function getNotes(d) {
   for (let i = 1; i < rows.length; i++) {
     if (
       normalizeMonth(rows[i][0]) === month &&
-      normalizeId(rows[i][2]) === targetId
+      (!targetId || normalizeId(rows[i][2]) === targetId)
     ) {
       out.push({
         month,
         reviewerId: normalizeId(rows[i][1]),
-        targetId,
+        targetId: normalizeId(rows[i][2]),
         type: String(rows[i][3] || "Positive").trim() || "Positive",
         note: rows[i][4],
         updatedAt: rows[i][5]
