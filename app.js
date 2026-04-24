@@ -8,16 +8,24 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- FETCH ----------------
+// ---------------- FETCH SAFE WRAPPER ----------------
 
 async function post(action, data = {}) {
-  const res = await fetch(API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, ...data })
-  });
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data })
+    });
 
-  return res.json();
+    const json = await res.json();
+    if (json?.error) throw new Error(json.error);
+
+    return json;
+  } catch (err) {
+    console.error("API ERROR:", action, err);
+    return null;
+  }
 }
 
 // ---------------- AUTH ----------------
@@ -27,14 +35,14 @@ let isAdmin = false;
 async function verify() {
   if (!userId || !token) {
     document.body.innerHTML = "❌ Missing credentials";
-    throw new Error();
+    throw new Error("missing credentials");
   }
 
   const res = await post("verifyUser", { discordId: userId, token });
 
-  if (!res.valid) {
+  if (!res || !res.valid) {
     document.body.innerHTML = "❌ Unauthorized";
-    throw new Error();
+    throw new Error("unauthorized");
   }
 
   isAdmin = res.isWebAdmin;
@@ -49,7 +57,7 @@ function setupTabs() {
   const tabs = document.querySelectorAll(".channel");
 
   tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
+    tab.onclick = () => {
       const target = tab.dataset.tab;
 
       document.querySelectorAll(".channel").forEach(t => t.classList.remove("active"));
@@ -59,7 +67,7 @@ function setupTabs() {
 
       const page = document.getElementById(target);
       if (page) page.classList.remove("hidden");
-    });
+    };
   });
 }
 
@@ -67,10 +75,10 @@ function setupTabs() {
 
 async function loadRatings() {
   const box = document.getElementById("staffRatings");
-  if (!box) return; // ✅ SAFE GUARD
+  if (!box) return;
 
-  const staff = await post("getStaff");
-  const existing = await post("getRatings", { month: month() });
+  const staff = await post("getStaff") || [];
+  const existing = await post("getRatings", { month: month() }) || [];
 
   box.innerHTML = "";
 
@@ -100,15 +108,16 @@ async function loadRatings() {
     box.appendChild(div);
   });
 
-  document.querySelectorAll("select, textarea").forEach(el => {
-    el.addEventListener("change", saveRatings);
+  // prevent duplicate listeners
+  box.querySelectorAll("select, textarea").forEach(el => {
+    el.onchange = saveRatings;
   });
 }
 
 async function saveRatings() {
   const ratings = [];
 
-  document.querySelectorAll("select").forEach(sel => {
+  document.querySelectorAll("select[data-id]").forEach(sel => {
     const id = sel.dataset.id;
     if (!id) return;
 
@@ -135,10 +144,10 @@ async function saveRatings() {
 
 async function loadNotes() {
   const box = document.getElementById("staffNotes");
-  if (!box) return; // ✅ FIX CRASH
+  if (!box) return;
 
-  const staff = await post("getStaff");
-  const notes = await post("getNotes", { month: month() });
+  const staff = await post("getStaff") || [];
+  const notes = await post("getNotes", { month: month() }) || {};
 
   box.innerHTML = "";
 
@@ -173,9 +182,9 @@ async function loadNotes() {
 
 async function addNote(id, type) {
   const input = document.querySelector(`textarea[data-id="${id}"]`);
-  const text = input?.value;
+  const text = input?.value?.trim();
 
-  if (!text || !text.trim()) return;
+  if (!text) return;
 
   await post("saveNote", {
     month: month(),
@@ -195,7 +204,7 @@ async function loadAdmin() {
   const box = document.getElementById("adminPanel");
   if (!box) return;
 
-  const data = await post("getDashboard", { month: month() });
+  const data = await post("getDashboard", { month: month() }) || [];
 
   box.innerHTML = "";
 
@@ -218,24 +227,28 @@ async function loadAdmin() {
   });
 }
 
-// ---------------- INIT (SAFE PAGE-AWARE LOADING) ----------------
+// ---------------- INIT ----------------
 
 (async () => {
   try {
     await verify();
     setupTabs();
 
+    const tasks = [];
+
     if (document.getElementById("staffRatings")) {
-      await loadRatings();
+      tasks.push(loadRatings());
     }
 
     if (document.getElementById("staffNotes")) {
-      await loadNotes();
+      tasks.push(loadNotes());
     }
 
     if (document.getElementById("adminPanel")) {
-      await loadAdmin();
+      tasks.push(loadAdmin());
     }
+
+    await Promise.all(tasks);
 
   } catch (e) {
     console.error(e);
