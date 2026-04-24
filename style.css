@@ -1,145 +1,63 @@
-/* ===== GLOBAL ===== */
-body {
+body.app {
   margin: 0;
-  font-family: system-ui, Arial, sans-serif;
-  background: #0f1117;
-  color: #e6e6e6;
+  font-family: Arial;
+  background: #313338;
+  color: white;
 }
 
-/* ===== HEADER ===== */
-.header {
-  text-align: center;
-  padding: 25px 15px;
-  background: #11131a;
-  border-bottom: 1px solid #1f2230;
+.layout {
+  display: flex;
+  height: 100vh;
 }
 
-.logo {
-  width: 90px;
-  height: 90px;
-  border-radius: 16px;
-  object-fit: cover;
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  background: #1e1f22;
+  padding: 10px;
 }
 
 .title {
-  font-size: 22px;
-  font-weight: 700;
-  margin-top: 8px;
+  font-weight: bold;
+  margin-bottom: 10px;
 }
 
-.subtitle {
-  font-size: 13px;
-  color: #a0a0a0;
-}
-
-/* ===== NAV ===== */
-.nav {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  padding: 12px;
-  background: #0d0f15;
-  border-bottom: 1px solid #1f2230;
-  flex-wrap: wrap;
-}
-
-.nav a {
-  color: #7dd3fc;
-  text-decoration: none;
-  font-size: 14px;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-
-.nav a:hover {
-  background: #1b1f2a;
-}
-
-/* ===== CONTAINER ===== */
-.container {
-  max-width: 900px;
-  margin: auto;
-  padding: 15px;
-}
-
-/* ===== PANELS / CARDS ===== */
-.panel, .card {
-  background: #151824;
-  border: 1px solid #222638;
-  border-radius: 12px;
-  padding: 15px;
-  margin-bottom: 12px;
-}
-
-/* ===== STAFF CARD STYLE ===== */
-.card {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-/* avatar */
-.card img {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-/* text */
-.card b {
-  display: block;
-  margin-bottom: 6px;
-}
-
-/* inputs */
-select, textarea {
-  width: 100%;
-  margin-top: 6px;
+.channel {
   padding: 8px;
-  border-radius: 8px;
-  border: 1px solid #2a2f44;
-  background: #0f1117;
-  color: white;
-  font-size: 13px;
-}
-
-/* buttons */
-button {
-  background: #5865f2;
-  color: white;
-  border: none;
-  padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 500;
+  color: #b5bac1;
 }
 
-button:hover {
-  background: #4752c4;
+.channel:hover {
+  background: #2b2d31;
 }
 
-/* ===== MOBILE ===== */
-@media (max-width: 600px) {
+.channel.active {
+  background: #404249;
+  color: white;
+}
 
-  .logo {
-    width: 70px;
-    height: 70px;
-  }
+/* MAIN */
+.main {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
 
-  .title {
-    font-size: 18px;
-  }
+.hidden {
+  display: none;
+}
 
-  .container {
-    padding: 10px;
-  }
+/* CARDS */
+.card {
+  background: #2b2d31;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 8px;
+}
 
-  .card {
-    flex-direction: column;
-  }
-
-  .nav {
-    gap: 8px;
-  }
+img {
+  width: 40px;
+  border-radius: 50%;
 }

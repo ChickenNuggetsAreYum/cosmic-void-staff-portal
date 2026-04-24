@@ -1,20 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-<link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body class="app">
 
-<div class="nav">
-  <a id="homeLink">Home</a>
-  <a id="ratingsLink">Ratings</a>
-  <a id="notesLink">Notes</a>
-  <a id="adminLink">Admin</a>
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="title">Cosmic Void</div>
+
+    <div class="channel active" onclick="openTab('home')"># home</div>
+    <div class="channel" onclick="openTab('ratings')"># ratings</div>
+    <div class="channel" onclick="openTab('notes')"># notes</div>
+    <div class="channel" id="adminChannel" onclick="openTab('admin')"># admin</div>
+
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <div id="home" class="tab">
+      <h2>Home</h2>
+      <div id="statusText">Loading...</div>
+    </div>
+
+    <div id="ratings" class="tab hidden">
+      <h2>Monthly Ratings</h2>
+      <div id="staffRatings"></div>
+      <button onclick="saveRatings()">Save Ratings</button>
+    </div>
+
+    <div id="notes" class="tab hidden">
+      <h2>Staff Notes</h2>
+      <div id="staffNotes"></div>
+    </div>
+
+    <div id="admin" class="tab hidden">
+      <h2>Admin Panel</h2>
+      <div id="adminPanel"></div>
+    </div>
+
+  </div>
+
 </div>
-
-<h1>Cosmic Void Staff Portal</h1>
-
-<div id="statusText">Loading...</div>
 
 <script src="app.js"></script>
 </body>

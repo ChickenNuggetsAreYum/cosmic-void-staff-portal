@@ -8,6 +8,13 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
+// ---------------- NAV / TABS ----------------
+
+function openTab(tab) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
+  document.getElementById(tab).classList.remove("hidden");
+}
+
 // ---------------- API ----------------
 
 async function post(action, data = {}) {
@@ -22,96 +29,51 @@ async function post(action, data = {}) {
 
 // ---------------- AUTH ----------------
 
-async function verifyAccess() {
-  if (!userId || !token) {
-    document.body.innerHTML = "<h2>❌ Missing credentials</h2>";
-    throw new Error();
-  }
-
+async function verify() {
   const res = await post("verifyUser", {
     discordId: userId,
     token
   });
 
   if (!res.valid) {
-    document.body.innerHTML = "<h2>❌ Invalid access</h2>";
+    document.body.innerHTML = "❌ Unauthorized";
     throw new Error();
+  }
+
+  if (res.isWebAdmin) {
+    document.getElementById("adminChannel").style.display = "block";
+  } else {
+    document.getElementById("adminChannel").style.display = "none";
   }
 
   return res;
 }
 
-// ---------------- NAV ----------------
-
-function setupNav(isAdmin) {
-  const admin = document.getElementById("adminLink");
-
-  if (admin) {
-    admin.style.display = isAdmin ? "inline-block" : "none";
-    admin.href = `admin.html?id=${userId}&token=${token}`;
-  }
-
-  document.getElementById("homeLink").href =
-    `index.html?id=${userId}&token=${token}`;
-
-  document.getElementById("ratingsLink").href =
-    `ratings.html?id=${userId}&token=${token}`;
-
-  document.getElementById("notesLink").href =
-    `notes.html?id=${userId}&token=${token}`;
-}
-
 // ---------------- DASHBOARD ----------------
 
-async function loadDashboard() {
+async function loadHome() {
   const el = document.getElementById("statusText");
-  if (!el) return;
-
-  el.innerText = "Loading...";
 
   const data = await post("getDashboardStatus", {
     month: month()
   });
 
   el.innerText = `📊 ${data.completed} / ${data.totalStaff} completed`;
-
-  return data;
 }
-
-// ---------------- INIT ----------------
-
-(async () => {
-  const auth = await verifyAccess();
-
-  setupNav(auth.isWebAdmin);
-
-  const dash = await loadDashboard();
-
-  const staff = await post("getStaff");
-
-  if (document.getElementById("staffList")) loadRatings(staff);
-  if (document.getElementById("notesList")) loadNotes(staff, dash);
-  if (document.getElementById("adminPanel")) loadAdmin(auth);
-})();
 
 // ---------------- RATINGS ----------------
 
-function loadRatings(staff) {
-  const c = document.getElementById("staffList");
-  if (!c) return;
+async function loadRatings() {
+  const staff = await post("getStaff");
+  const c = document.getElementById("staffRatings");
 
   c.innerHTML = "";
 
   staff.forEach(s => {
-    if (!s.isActive) return;
+    if (!s.isActive || s.discordId === userId) return;
 
     const div = document.createElement("div");
     div.className = "card";
-
-    if (s.discordId === userId) {
-      div.innerHTML = `<b>${s.name} (You)</b>`;
-      return;
-    }
 
     div.innerHTML = `
       <img src="${s.avatarURL}">
@@ -126,22 +88,46 @@ function loadRatings(staff) {
         <option>N/A</option>
       </select>
 
-      <textarea data-comment="${s.discordId}" placeholder="Comment"></textarea>
+      <textarea data-comment="${s.discordId}"></textarea>
     `;
 
     c.appendChild(div);
   });
 }
 
+async function saveRatings() {
+  const selects = document.querySelectorAll("select");
+
+  let ratings = [];
+
+  selects.forEach(s => {
+    const id = s.dataset.id;
+    if (!id) return;
+
+    ratings.push({
+      targetId: id,
+      rating: s.value,
+      comment: document.querySelector(`[data-comment="${id}"]`)?.value || ""
+    });
+  });
+
+  await post("saveRatings", {
+    reviewerId: userId,
+    token,
+    month: month(),
+    ratings
+  });
+
+  alert("Saved!");
+}
+
 // ---------------- NOTES ----------------
 
-function loadNotes(staff, dash) {
-  const c = document.getElementById("notesList");
-  if (!c) return;
+async function loadNotes() {
+  const staff = await post("getStaff");
+  const c = document.getElementById("staffNotes");
 
   c.innerHTML = "";
-
-  const locked = !dash.allComplete;
 
   staff.forEach(s => {
     if (!s.isActive || s.discordId === userId) return;
@@ -149,19 +135,15 @@ function loadNotes(staff, dash) {
     const div = document.createElement("div");
     div.className = "card";
 
-    if (locked) {
-      div.innerHTML = `<b>${s.name}</b><p>🔒 Locked until ratings complete</p>`;
-    } else {
-      div.innerHTML = `
-        <img src="${s.avatarURL}">
-        <b>${s.name}</b>
+    div.innerHTML = `
+      <img src="${s.avatarURL}">
+      <b>${s.name}</b>
 
-        <button onclick="sendNote('${s.discordId}','positive')">👍</button>
-        <button onclick="sendNote('${s.discordId}','negative')">👎</button>
+      <button onclick="sendNote('${s.discordId}','positive')">👍</button>
+      <button onclick="sendNote('${s.discordId}','negative')">👎</button>
 
-        <textarea id="n-${s.discordId}"></textarea>
-      `;
-    }
+      <textarea id="n-${s.discordId}"></textarea>
+    `;
 
     c.appendChild(div);
   });
@@ -180,4 +162,15 @@ async function sendNote(id, type) {
   });
 
   alert("Saved");
-}   
+}
+
+// ---------------- INIT ----------------
+
+(async () => {
+  await verify();
+  await loadHome();
+  await loadRatings();
+  await loadNotes();
+
+  openTab("home");
+})();
