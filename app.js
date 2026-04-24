@@ -1,4 +1,4 @@
-const API = "https://script.google.com/macros/s/AKfycbyl0_Aq4jBLmMKTqXORLxb6AGJ0xKOYti-DITn6Ix0NbnSSgPDKRSxQKAZ24sz_0DTG/exec";
+const API = "https://remoteworker23.jeoliver1fan.workers.dev/";
 
 const params = new URLSearchParams(window.location.search);
 const userId = params.get("id");
