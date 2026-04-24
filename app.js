@@ -19,6 +19,11 @@ async function post(action, data = {}) {
     });
 
     const text = await res.text();
+
+    if (!text || !text.trim().startsWith("{")) {
+      throw new Error("Invalid server response: " + text);
+    }
+
     return JSON.parse(text);
 
   } catch (e) {
@@ -30,9 +35,12 @@ async function post(action, data = {}) {
 // ---------------- VERIFY ----------------
 
 async function verify() {
-  const res = await post("verifyUser", { discordId: userId, token });
+  const res = await post("verifyUser", {
+    discordId: userId,
+    token
+  });
 
-  if (!res || !res.valid) {
+  if (!res?.valid) {
     document.body.innerHTML = "❌ Unauthorized";
     throw new Error("Unauthorized");
   }
@@ -59,23 +67,23 @@ async function loadReviews() {
     return;
   }
 
+  // safety timeout (ONLY ONCE, not inside flow)
+  const timeout = setTimeout(() => {
+    setLoading(false);
+    if (box.innerHTML === "") {
+      box.innerHTML = "⚠️ Loading timed out. Please refresh.";
+    }
+  }, 10000);
+
   const staff = await post("getStaff");
   const existing = await post("getRatings", { month: month() });
 
-  if (!staff || !existing) {
-    box.innerHTML = "⚠️ Failed to load staff or ratings";
+  if (!Array.isArray(staff) || !Array.isArray(existing)) {
+    clearTimeout(timeout);
     setLoading(false);
+    box.innerHTML = "⚠️ Failed to load data from server.";
     return;
   }
-  setTimeout(() => {
-  const spinner = document.getElementById("loadingSpinner");
-  if (spinner) spinner.style.display = "none";
-
-  const box = document.getElementById("ratingsBox");
-  if (box && box.innerHTML === "") {
-    box.innerHTML = "⚠️ Loading timed out. Try refreshing.";
-  }
-}, 10000);
 
   box.innerHTML = "";
 
@@ -84,7 +92,7 @@ async function loadReviews() {
 
     const isYou = String(s.discordId) === String(userId);
 
-    const my = (existing || []).find(e =>
+    const my = existing.find(e =>
       String(e.targetId) === String(s.discordId)
     );
 
@@ -118,6 +126,7 @@ async function loadReviews() {
     el.addEventListener("change", saveReviews);
   });
 
+  clearTimeout(timeout);
   setLoading(false);
 }
 
@@ -128,13 +137,12 @@ async function saveReviews() {
 
   document.querySelectorAll("select").forEach(sel => {
     const id = sel.dataset.id;
+
     if (!id || id === userId) return;
-
-    const comment = document.querySelector(
-      `textarea[data-id="${id}"]`
-    )?.value || "";
-
     if (sel.value === "N/A") return;
+
+    const comment =
+      document.querySelector(`textarea[data-id="${id}"]`)?.value || "";
 
     ratings.push({
       targetId: id,
