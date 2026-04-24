@@ -72,11 +72,7 @@ async function loadReviews() {
   }
 
   if (!RATINGS_CACHE) {
-    RATINGS_CACHE = await post("getRatings", {
-      month: month(),
-      reviewerId: userId,
-      token
-    });
+    RATINGS_CACHE = await post("getRatings", { month: month() });
   }
 
   if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
@@ -88,15 +84,20 @@ async function loadReviews() {
   if (spinner) spinner.style.display = "none";
   box.innerHTML = "";
 
+  const ratingMap = RATINGS_CACHE.reduce((map, row) => {
+    const targetId = String(row.targetId ?? "").trim();
+    const reviewerId = String(row.reviewerId ?? "").trim();
+    if (targetId && reviewerId) {
+      map[`${targetId}|${reviewerId}`] = row;
+    }
+    return map;
+  }, {});
+
   STAFF_CACHE.forEach(s => {
     if (!s.isActive) return;
 
     const isYou = String(s.discordId) === String(userId);
-
-    const my = RATINGS_CACHE.find(e =>
-      String(e.targetId) === String(s.discordId)
-      && (String(e.reviewerId) === String(userId) || e.reviewerId == null)
-    );
+    const my = ratingMap[`${String(s.discordId).trim()}|${String(userId).trim()}`];
     const selectedRating = my?.rating?.toString().trim().toLowerCase();
 
     const div = document.createElement("div");
