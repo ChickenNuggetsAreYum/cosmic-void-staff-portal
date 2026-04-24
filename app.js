@@ -8,8 +8,6 @@ function month() {
   return new Date().toISOString().slice(0, 7);
 }
 
-// ---------------- FETCH ----------------
-
 async function post(action, data = {}) {
   const res = await fetch(API, {
     method: "POST",
@@ -25,41 +23,39 @@ async function post(action, data = {}) {
 let isAdmin = false;
 
 async function verify() {
+  if (!userId || !token) {
+    document.body.innerHTML = "❌ Missing credentials";
+    throw new Error();
+  }
+
   const res = await post("verifyUser", { discordId: userId, token });
 
   if (!res.valid) {
     document.body.innerHTML = "❌ Unauthorized";
-    throw new Error("Unauthorized");
+    throw new Error();
   }
 
-  isAdmin = res.isWebAdmin || false;
+  isAdmin = res.isWebAdmin;
 
   const adminTab = document.getElementById("adminTab");
   if (adminTab && !isAdmin) adminTab.style.display = "none";
 }
 
-// ---------------- TAB SYSTEM (FIXED) ----------------
+// ---------------- TABS ----------------
 
 function setupTabs() {
-  const tabs = document.querySelectorAll(".channel");
-
-  tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
+  document.querySelectorAll(".channel").forEach(tab => {
+    tab.onclick = () => {
       const target = tab.dataset.tab;
 
-      // remove active styling
-      tabs.forEach(t => t.classList.remove("active"));
-
-      // hide all panels
       document.querySelectorAll(".tab").forEach(t => t.classList.add("hidden"));
+      document.querySelectorAll(".channel").forEach(t => t.classList.remove("active"));
 
-      // activate clicked tab
       tab.classList.add("active");
 
-      // show correct panel
       const el = document.getElementById(target);
       if (el) el.classList.remove("hidden");
-    });
+    };
   });
 }
 
@@ -67,42 +63,31 @@ function setupTabs() {
 
 async function loadRatings() {
   const staff = await post("getStaff");
-  const existing = await post("getRatings", {
-    month: month()
-  });
+  const existing = await post("getRatings", { month: month() });
 
   const container = document.getElementById("staffRatings");
-  if (!container) return;
-
   container.innerHTML = "";
 
   staff.forEach(s => {
     if (!s.isActive) return;
 
     const my = existing.find(e => e.targetId === s.discordId);
-
     const isYou = s.discordId === userId;
 
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <img src="${s.avatarURL || ''}">
+      <b>${s.name} ${isYou ? "(You)" : ""}</b>
 
-      <div style="flex:1">
-        <b>${s.name} ${isYou ? "(You)" : ""}</b>
+      ${isYou ? `<div>This is you!</div>` : `
+        <select data-id="${s.discordId}">
+          ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
+            .map(v => `<option ${my?.rating === v ? "selected" : ""}>${v}</option>`).join("")}
+        </select>
 
-        ${isYou ? `
-          <div style="opacity:0.7; margin-top:5px;">This is you!</div>
-        ` : `
-          <select data-id="${s.discordId}">
-            ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
-              .map(v => `<option ${my?.rating === v ? "selected" : ""}>${v}</option>`).join("")}
-          </select>
-
-          <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
-        `}
-      </div>
+        <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
+      `}
     `;
 
     container.appendChild(div);
@@ -112,8 +97,6 @@ async function loadRatings() {
     el.onchange = saveRatings;
   });
 }
-
-// ---------------- SAVE RATINGS ----------------
 
 async function saveRatings() {
   const ratings = [];
@@ -143,20 +126,16 @@ async function saveRatings() {
 
 async function loadNotes() {
   const staff = await post("getStaff");
-  const notes = await post("getNotes", {
-    month: month()
-  });
+  const notes = await post("getNotes", { month: month() });
 
   const container = document.getElementById("staffNotes");
-  if (!container) return;
-
   container.innerHTML = "";
 
   staff.forEach(s => {
     if (!s.isActive) return;
 
-    const isYou = s.discordId === userId;
     const n = notes[s.discordId] || [];
+    const isYou = s.discordId === userId;
 
     const div = document.createElement("div");
     div.className = "card";
@@ -164,13 +143,7 @@ async function loadNotes() {
     div.innerHTML = `
       <b>${s.name} ${isYou ? "(You)" : ""}</b>
 
-      ${isYou ? `<div style="opacity:0.7">This is you!</div>` : ""}
-
-      <div style="margin-top:5px;">
-        ${n.map(x => `
-          <div>${x.type === "positive" ? "👍" : "👎"} ${x.note}</div>
-        `).join("") || "<i>No notes</i>"}
-      </div>
+      ${n.map(x => `<div>${x.type === "positive" ? "👍" : "👎"} ${x.note}</div>`).join("")}
 
       ${!isYou ? `
         <textarea data-id="${s.discordId}"></textarea>
@@ -183,12 +156,9 @@ async function loadNotes() {
   });
 }
 
-// ---------------- ADD NOTE ----------------
-
 async function addNote(id, type) {
   const text = document.querySelector(`textarea[data-id="${id}"]`)?.value;
-
-  if (!text) return;
+  if (!text || !text.trim()) return;
 
   await post("saveNote", {
     month: month(),
@@ -208,8 +178,6 @@ async function loadAdmin() {
   const data = await post("getDashboard", { month: month() });
 
   const container = document.getElementById("adminPanel");
-  if (!container) return;
-
   container.innerHTML = "";
 
   data.forEach(s => {
@@ -238,7 +206,6 @@ async function loadAdmin() {
 
   } catch (e) {
     console.error(e);
-    document.body.innerHTML = "❌ Failed to load dashboard";
   } finally {
     document.getElementById("loadingScreen")?.remove();
     document.getElementById("app")?.classList.remove("hidden");
