@@ -1,0 +1,352 @@
+const API = "https://remoteworker23.jeoliver1fan.workers.dev/";
+const params = new URLSearchParams(window.location.search);
+const userId = params.get("id");
+const token = params.get("token");
+
+const state = {
+  staff: [],
+  ratings: [],
+  notes: [],
+  month: getCurrentMonth(),
+  user: null
+};
+
+function getCurrentMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function isTrue(value) {
+  return value === true || String(value || "").trim().toLowerCase() === "true";
+}
+
+function getEl(id) {
+  return document.getElementById(id);
+}
+
+function showSpinner() {
+  const spinner = getEl("loadingSpinner");
+  if (spinner) spinner.style.display = "block";
+}
+
+function hideSpinner() {
+  const spinner = getEl("loadingSpinner");
+  if (spinner) spinner.style.display = "none";
+}
+
+function showStatus(message, type = "info") {
+  const status = getEl("statusMessage");
+  if (!status) return;
+  status.textContent = message;
+  status.className = `status-message ${type}`;
+}
+
+function clearStatus() {
+  const status = getEl("statusMessage");
+  if (!status) return;
+  status.textContent = "";
+  status.className = "status-message";
+}
+
+function showError(message) {
+  hideSpinner();
+  showStatus(message, "error");
+  const reviewsBox = getEl("reviewsBox");
+  if (reviewsBox) {
+    reviewsBox.innerHTML = `<div class="card"><p>${message}</p></div>`;
+  }
+}
+
+window.addEventListener("unhandledrejection", event => {
+  console.error("Unhandled promise rejection:", event.reason);
+  showError("❌ Unexpected error occurred while loading. Please refresh the page.");
+});
+
+window.addEventListener("error", event => {
+  console.error("Unhandled error:", event.error || event.message);
+  showError("❌ Unexpected error occurred while loading. Please refresh the page.");
+});
+
+async function fetchApi(action, data = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...data }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error(`API ${action} failed`, error);
+    return null;
+  }
+}
+
+async function verifyUser() {
+  if (!userId || !token) {
+    showError("❌ Missing login credentials. Use a valid id and token in the URL.");
+    return false;
+  }
+
+  showStatus("Verifying credentials...");
+  const tokenRes = await fetchApi("getToken", { discordId: userId });
+  const verifyRes = await fetchApi("verifyUser", { discordId: userId, token });
+
+  if (!tokenRes || !verifyRes) {
+    showError("❌ Could not verify credentials. Please try again later.");
+    return false;
+  }
+
+  if (!isTrue(tokenRes.success) || !isTrue(verifyRes.valid)) {
+    showError("❌ Unauthorized. Please check your login link.");
+    return false;
+  }
+
+  if (!isTrue(tokenRes.isActive)) {
+    showPage("revoked");
+    return false;
+  }
+
+  state.user = {
+    ...tokenRes,
+    isWebAdmin: isTrue(verifyRes.isWebAdmin)
+  };
+
+  if (state.user.isWebAdmin) {
+    getEl("adminTab")?.classList.remove("hidden");
+  }
+
+  showStatus(`Signed in as ${state.user.name || "Staff"}`);
+  return true;
+}
+
+function showPage(page) {
+  document.querySelectorAll("[data-page]").forEach(link => {
+    link.classList.toggle("active", link.dataset.page === page);
+  });
+
+  ["reviewsPage", "adminPage", "revokedPage"].forEach(id => {
+    const element = getEl(id);
+    if (!element) return;
+    element.classList.toggle("hidden", id !== `${page}Page`);
+  });
+
+  const menu = document.querySelector(".menu");
+  if (menu) {
+    menu.classList.toggle("hidden", page === "revoked");
+  }
+}
+
+function buildMonthOptions() {
+  const select = getEl("adminMonthSelect");
+  if (!select) return;
+
+  const current = new Date();
+  select.innerHTML = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(current.getFullYear(), current.getMonth() - index, 1);
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return `<option value="${value}">${value}</option>`;
+  }).join("");
+
+  select.value = state.month;
+  select.addEventListener("change", async () => {
+    state.month = select.value;
+    await loadAdmin();
+  });
+}
+
+function renderReviews() {
+  const reviewsBox = getEl("reviewsBox");
+  if (!reviewsBox) return;
+
+  const activeStaff = state.staff.filter(member => isTrue(member.isActive));
+  if (!activeStaff.length) {
+    reviewsBox.innerHTML = `<div class="card"><p>No active staff found.</p></div>`;
+    return;
+  }
+
+  reviewsBox.innerHTML = activeStaff.map(member => {
+    const isYou = String(member.discordId).trim() === String(userId).trim();
+    const currentRating = state.ratings.find(r => String(r.targetId).trim() === String(member.discordId).trim() && String(r.reviewerId).trim() === String(userId).trim());
+    const selectedRating = currentRating?.rating ? currentRating.rating : "N/A";
+
+    if (isYou) {
+      return `
+        <div class="card no-click">
+          <img src="${member.avatarURL || ""}" alt="${member.name}">
+          <div class="card-body">
+            <b>${member.name}</b>
+            <p style="opacity:0.6;">This is you</p>
+          </div>
+        </div>`;
+    }
+
+    return `
+      <div class="card" data-id="${member.discordId}">
+        <img src="${member.avatarURL || ""}" alt="${member.name}">
+        <div class="card-body">
+          <b>${member.name}</b>
+          <select data-id="${member.discordId}">
+            ${["Excels", "On Par", "Meets Standards", "Below Par", "Needs Work", "N/A"].map(option => `
+              <option value="${option}" ${option === selectedRating ? "selected" : ""}>${option}</option>
+            `).join("")}
+          </select>
+          <textarea data-id="${member.discordId}" placeholder="Leave a comment...">${currentRating?.comment || ""}</textarea>
+        </div>
+      </div>`;
+  }).join("");
+
+  document.querySelectorAll("#reviewsBox select[data-id], #reviewsBox textarea[data-id]").forEach(element => {
+    element.addEventListener("change", saveReviews);
+  });
+}
+
+function renderAdmin() {
+  const statsBox = getEl("adminStats");
+  const adminList = getEl("adminList");
+  if (!statsBox || !adminList) return;
+
+  const activeStaff = state.staff.filter(member => isTrue(member.isActive));
+  const ratingCount = state.ratings.length;
+
+  statsBox.innerHTML = `
+    <div class="stat-card">
+      <b>Active staff</b>
+      <span>${activeStaff.length}</span>
+    </div>
+    <div class="stat-card">
+      <b>Total ratings</b>
+      <span>${ratingCount}</span>
+    </div>`;
+
+  adminList.innerHTML = activeStaff.length ? activeStaff.map(member => {
+    const count = state.ratings.filter(r => String(r.targetId).trim() === String(member.discordId).trim()).length;
+    return `
+      <div class="card staff-card">
+        <img src="${member.avatarURL || ""}" alt="${member.name}">
+        <div class="card-body">
+          <b>${member.name}</b>
+          <p>Ratings: ${count}</p>
+        </div>
+      </div>`;
+  }).join("") : `<div class="card"><p>No active staff found.</p></div>`;
+}
+
+async function loadReviews() {
+  showPage("reviews");
+  showStatus("Loading reviews...");
+  showSpinner();
+
+  if (!state.staff.length) {
+    const staff = await fetchApi("getStaff");
+    state.staff = Array.isArray(staff) ? staff : [];
+  }
+
+  const ratings = await fetchApi("getRatings", { month: state.month });
+  state.ratings = Array.isArray(ratings) ? ratings : [];
+
+  const notes = await fetchApi("getNotes", { month: state.month });
+  state.notes = Array.isArray(notes) ? notes : [];
+
+  if (!Array.isArray(state.staff)) {
+    showError("❌ Failed to load staff.");
+    hideSpinner();
+    return;
+  }
+
+  renderReviews();
+  hideSpinner();
+  showStatus("Reviews loaded.");
+}
+
+async function loadAdmin() {
+  if (!state.user?.isWebAdmin) {
+    showError("❌ Admin access required.");
+    return;
+  }
+
+  showPage("admin");
+  showStatus("Loading admin dashboard...");
+  showSpinner();
+
+  if (!state.staff.length) {
+    const staff = await fetchApi("getStaff");
+    state.staff = Array.isArray(staff) ? staff : [];
+  }
+
+  const ratings = await fetchApi("getRatings", { month: state.month });
+  state.ratings = Array.isArray(ratings) ? ratings : [];
+
+  const notes = await fetchApi("getNotes", { month: state.month });
+  state.notes = Array.isArray(notes) ? notes : [];
+
+  renderAdmin();
+  hideSpinner();
+  showStatus("Admin dashboard loaded.");
+}
+
+async function saveReviews() {
+  const payload = Array.from(document.querySelectorAll("#reviewsBox select[data-id]")).map(select => {
+    const id = select.dataset.id;
+    const value = select.value;
+    const comment = document.querySelector(`#reviewsBox textarea[data-id='${id}']`)?.value || "";
+    return { id, value, comment };
+  }).filter(item => item.id && item.value && item.value !== "N/A");
+
+  if (!payload.length) {
+    showStatus("No ratings to save.");
+    return;
+  }
+
+  showStatus("Saving ratings...");
+  await fetchApi("saveRatings", {
+    reviewerId: userId,
+    token,
+    month: state.month,
+    ratings: payload.map(item => ({ targetId: item.id, rating: item.value, comment: item.comment }))
+  });
+
+  const updatedRatings = await fetchApi("getRatings", { month: state.month });
+  state.ratings = Array.isArray(updatedRatings) ? updatedRatings : state.ratings;
+  showStatus("Ratings saved.");
+}
+
+function setupNav() {
+  getEl("reviewsTab")?.addEventListener("click", async event => {
+    event.preventDefault();
+    await loadReviews();
+  });
+
+  getEl("adminTab")?.addEventListener("click", async event => {
+    event.preventDefault();
+    await loadAdmin();
+  });
+}
+
+(async function init() {
+  try {
+    showPage("reviews");
+    showSpinner();
+    buildMonthOptions();
+
+    const verified = await verifyUser();
+    if (!verified) return;
+
+    setupNav();
+    await loadReviews();
+  } catch (error) {
+    console.error(error);
+    showError("❌ Failed to initialize portal.");
+  } finally {
+    hideSpinner();
+  }
+})();

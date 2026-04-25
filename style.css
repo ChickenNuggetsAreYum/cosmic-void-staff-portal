@@ -28,6 +28,27 @@ h1 {
   padding: 20px;
 }
 
+.status-message {
+  text-align: center;
+  margin-bottom: 16px;
+  color: #94a3b8;
+  min-height: 22px;
+}
+
+.status-message.error {
+  color: #fca5a5;
+}
+
+.page {
+  display: block;
+}
+
+.page-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
 .card {
   background: #111827;
   padding: 15px;
@@ -38,6 +59,10 @@ h1 {
   align-items: flex-start;
   cursor: pointer;
   transition: all 0.3s ease;
+}
+
+.card.no-click {
+  cursor: default;
 }
 
 .card:hover:not(.expanded) {
@@ -63,18 +88,6 @@ h1 {
 
 .card.expanded img {
   display: none;
-}
-
-.card-header {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-  width: 100%;
-}
-
-.card.expanded .card-header {
-  flex-direction: column;
-  align-items: flex-start;
 }
 
 .card-body {
@@ -107,10 +120,11 @@ h1 {
   }
 }
 
-select, textarea {
+select,
+textarea {
   width: 100%;
   margin-top: 5px;
-  padding: 6px;
+  padding: 8px;
   border-radius: 6px;
   border: none;
   background: #1f2937;
@@ -146,18 +160,19 @@ button:hover {
 .menu a {
   color: cyan;
   text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.menu a.active {
+  color: #ffffff;
+  background: rgba(59, 130, 246, 0.18);
 }
 
 .hidden {
   display: none;
 }
 
-.center-title{
-  text-align:center;
-  margin-bottom:20px;
-}
-
-/* LOADING SPINNER */
 .spinner {
   display: none;
   border: 4px solid #1f2937;
@@ -171,19 +186,6 @@ button:hover {
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-.spinner {
-  border: 4px solid #1f2937;
-  border-top: 4px solid #3b82f6;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin: 20px auto;
-}
-
-@keyframes spin {
   100% { transform: rotate(360deg); }
 }
 
@@ -242,47 +244,6 @@ button:hover {
   color: #94a3b8;
 }
 
-#adminReviews {
-  margin-top: 10px;
-}
-
-.details-tabs {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.details-tab-button {
-  background: #1f2937;
-  border: none;
-  color: #94a3b8;
-  border-radius: 999px;
-  padding: 8px 14px;
-  cursor: pointer;
-}
-
-.details-tab-button.active {
-  background: #3b82f6;
-  color: white;
-}
-
-.staff-link {
-  display: inline-block;
-  background: transparent;
-  border: none;
-  color: #7dd3fc;
-  text-decoration: underline;
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0;
-  margin-bottom: 10px;
-}
-
-.staff-link:hover {
-  color: #38bdf8;
-}
-
 .admin-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -319,11 +280,6 @@ button:hover {
 .note-item p {
   margin: 8px 0 0;
   white-space: pre-wrap;
-}
-
-.menu a.active {
-  color: #ffffff;
-  font-weight: 700;
 }
 
 @media (max-width: 640px) {
