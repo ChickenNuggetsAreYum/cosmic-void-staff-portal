@@ -10,31 +10,34 @@
 <body>
 
   <div class="header">
-    <img src="https://cdn.discordapp.com/attachments/1433974277350096947/1488346333487169586/CV_easter_icon.png?ex=69ecbeca&is=69eb6d4a&hm=3a0bdce7c531f7f54b7b44e7687d2a168db9792b79a551182c638fc470d118bb&" class="logo">
+    <img src="https://cdn.discordapp.com/attachments/1433974277350096947/1488346333487169586/CV_easter_icon.png" class="logo">
     <h1>Cosmic Void</h1>
     <p>Staff Portal</p>
   </div>
 
   <div class="menu">
-    <a href="#" data-page="reviews">Reviews</a>
+    <a href="#" data-page="reviews" class="active">Reviews</a>
     <a href="#" data-page="admin" class="hidden">Admin</a>
   </div>
 
   <div class="container">
 
+    <!-- REVIEWS PAGE -->
     <div id="reviewsPage">
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2 class="center-title" style="margin: 0; flex: 1;">Monthly Ratings</h2>
-        <button id="reviewsRefresh" title="Refresh data" style="padding: 8px 12px; cursor: pointer; background: #3b82f6;">🔄 Refresh</button>
+        <button id="reviewsRefresh">🔄 Refresh</button>
       </div>
 
       <div id="loadingSpinner" class="spinner"></div>
 
-      <div id="reviewsBox"></div>
+      <!-- IMPORTANT: Cards get injected here -->
+      <div id="reviewsBox" class="card-list"></div>
 
     </div>
 
+    <!-- ADMIN PAGE -->
     <div id="adminPage" class="hidden">
       <h2 class="center-title">Admin Ratings Dashboard</h2>
 
@@ -42,12 +45,14 @@
         <label for="adminMonthSelect">Month</label>
         <select id="adminMonthSelect"></select>
         <button id="adminReload">Load Month</button>
-        <button id="adminRefresh" title="Refresh all data">🔄 Refresh</button>
+        <button id="adminRefresh">🔄 Refresh</button>
       </div>
 
-      <div id="adminList"></div>
+      <!-- IMPORTANT: Cards get injected here -->
+      <div id="adminList" class="card-list"></div>
     </div>
 
+    <!-- REVOKED -->
     <div id="revokedPage" class="hidden">
       <div class="card">
         <h2>Access Revoked</h2>
@@ -57,6 +62,13 @@
     </div>
 
   </div>
+
+  <script>
+    // SIMPLE CARD TOGGLE (ensures expansion works globally)
+    function toggleCard(card) {
+      card.classList.toggle("expanded");
+    }
+  </script>
 
   <script src="app.js"></script>
 </body>
