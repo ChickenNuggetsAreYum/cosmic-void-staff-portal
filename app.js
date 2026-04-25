@@ -182,7 +182,10 @@ async function loadReviews() {
   const spinner = document.getElementById("loadingSpinner");
   if (!box) return;
 
+  setActivePage("reviews");
+  box.innerHTML = `<div class="card"><p>Loading staff and ratings...</p></div>`;
   showSpinner();
+
   const currentMonth = month();
   if (RATINGS_MONTH !== currentMonth) {
     RATINGS_CACHE = null;
