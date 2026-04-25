@@ -122,7 +122,6 @@ function setupNav() {
   }
 
   initAdminControls();
-  setupReviewRefresh();
 }
 
 function setActivePage(page) {
@@ -143,9 +142,7 @@ function setActivePage(page) {
 
 function initAdminControls() {
   const select = document.getElementById("adminMonthSelect");
-  const reload = document.getElementById("adminReload");
-  const refresh = document.getElementById("adminRefresh");
-  if (!select || !reload) return;
+  if (!select) return;
 
   const values = [];
   const current = new Date();
@@ -156,28 +153,10 @@ function initAdminControls() {
 
   select.innerHTML = values.map(month => `<option value="${month}">${month}</option>`).join("");
   select.value = month();
-  reload.addEventListener("click", loadAdmin);
-  if (refresh) {
-    refresh.addEventListener("click", async () => {
-      STAFF_CACHE = null;
-      RATINGS_CACHE = null;
-      NOTES_CACHE = null;
-      RATINGS_MONTH = null;
-      await loadAdmin();
-    });
-  }
-}
 
-function setupReviewRefresh() {
-  const refreshBtn = document.getElementById("reviewsRefresh");
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", async () => {
-      STAFF_CACHE = null;
-      RATINGS_CACHE = null;
-      NOTES_CACHE = null;
-      RATINGS_MONTH = null;
-      await loadReviews();
-    });
+  if (!select.dataset.adminInit) {
+    select.addEventListener("change", loadAdmin);
+    select.dataset.adminInit = "true";
   }
 }
 
@@ -195,12 +174,13 @@ async function loadReviews() {
   }
 
   // fetch once only
-  if (!STAFF_CACHE) {
+  if (!STAFF_CACHE || RATINGS_MONTH !== currentMonth) {
     STAFF_CACHE = await post("getStaff");
   }
 
-  if (!RATINGS_CACHE) {
+  if (!RATINGS_CACHE || RATINGS_MONTH !== currentMonth) {
     RATINGS_CACHE = await post("getRatings", { month: currentMonth });
+    RATINGS_MONTH = currentMonth;
   }
 
   try {
