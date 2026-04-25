@@ -39,17 +39,23 @@ let EXPANDED_CARD = null;
 // ---------------- API ----------------
 
 async function post(action, data = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
   try {
     const res = await fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, ...data })
+      body: JSON.stringify({ action, ...data }),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
     const text = await res.text();
     return JSON.parse(text);
 
   } catch (e) {
+    clearTimeout(timeoutId);
     console.error("API ERROR:", action, e);
     return null;
   }
