@@ -37,6 +37,10 @@ function normalizeId(value) {
   return String(value || "").trim();
 }
 
+function isTrue(value) {
+  return value === true || String(value || "").trim().toLowerCase() === "true";
+}
+
 // ---------------- STAFF ----------------
 
 function getStaff(){
@@ -69,8 +73,8 @@ function getToken(d){
   return json({
     success:true,
     token: user.secretToken,
-    isActive: user.isActive === true,
-    isWebAdmin: user.isWebAdmin === true,
+    isActive: isTrue(user.isActive),
+    isWebAdmin: isTrue(user.isWebAdmin),
     name: user.name,
     avatarURL: user.avatarURL
   });
@@ -87,11 +91,11 @@ function verifyUser(d){
 
   const ok =
     String(user.secretToken).trim() === String(d.token).trim() &&
-    user.isActive === true;
+    isTrue(user.isActive);
 
   return json({
     valid: ok,
-    isWebAdmin: user.isWebAdmin === true
+    isWebAdmin: isTrue(user.isWebAdmin)
   });
 }
 
@@ -227,7 +231,7 @@ function saveNotes(d) {
 // ---------------- DASHBOARD ----------------
 
 function getDashboard(d){
-  const staff = getStaff().filter(s=>s.isActive === true);
+  const staff = getStaff().filter(s=>isTrue(s.isActive));
   const rows = sheet(RATINGS_TAB).getDataRange().getValues();
 
   let map = {};

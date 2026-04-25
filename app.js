@@ -12,6 +12,21 @@ function isTrue(value) {
   return value === true || String(value).trim().toLowerCase() === "true";
 }
 
+function hideSpinner() {
+  const spinner = document.getElementById("loadingSpinner");
+  if (spinner) spinner.style.display = "none";
+}
+
+function showError(message) {
+  hideSpinner();
+  const box = document.getElementById("reviewsBox");
+  if (box) {
+    box.innerHTML = `<div class="card"><p>${message}</p></div>`;
+  } else {
+    document.body.innerHTML = message;
+  }
+}
+
 // ---------------- CACHE ----------------
 
 let STAFF_CACHE = null;
@@ -43,6 +58,11 @@ async function post(action, data = {}) {
 // ---------------- VERIFY ----------------
 
 async function verify() {
+  if (!userId || !token) {
+    showError("❌ Unauthorized: missing credentials");
+    throw new Error("Missing credentials");
+  }
+
   const tokenRes = await post("getToken", { discordId: userId });
   const verifyRes = await post("verifyUser", {
     discordId: userId,
@@ -50,7 +70,7 @@ async function verify() {
   });
 
   if (!isTrue(tokenRes?.success)) {
-    document.body.innerHTML = "❌ Unauthorized";
+    showError("❌ Unauthorized");
     throw new Error("Unauthorized");
   }
 
@@ -60,7 +80,7 @@ async function verify() {
   }
 
   if (!isTrue(verifyRes?.valid)) {
-    document.body.innerHTML = "❌ Unauthorized";
+    showError("❌ Unauthorized");
     throw new Error("Unauthorized");
   }
 
@@ -177,86 +197,90 @@ async function loadReviews() {
     RATINGS_CACHE = await post("getRatings", { month: currentMonth });
   }
 
-  if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
-    if (spinner) spinner.style.display = "none";
-    box.innerHTML = "❌ Failed to load data";
-    return;
-  }
-
-  await loadNotesForMonth(currentMonth);
-
-  if (spinner) spinner.style.display = "none";
-  box.innerHTML = "";
-  setActivePage("reviews");
-
-  const ratingMap = RATINGS_CACHE.reduce((map, row) => {
-    const targetId = String(row.targetId ?? "").trim();
-    const reviewerId = String(row.reviewerId ?? "").trim();
-    if (targetId && reviewerId) {
-      map[`${targetId}|${reviewerId}`] = row;
+  try {
+    if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
+      showError("❌ Failed to load data");
+      return;
     }
-    return map;
-  }, {});
 
-  STAFF_CACHE.forEach(s => {
-    if (!isTrue(s.isActive)) return;
+    await loadNotesForMonth(currentMonth);
 
-    const isYou = String(s.discordId) === String(userId);
-    const my = ratingMap[`${String(s.discordId).trim()}|${String(userId).trim()}`];
-    const selectedRating = my?.rating?.toString().trim().toLowerCase() || "n/a";
+    hideSpinner();
+    box.innerHTML = "";
+    setActivePage("reviews");
 
-    const div = document.createElement("div");
-    div.className = "card";
-    div.dataset.id = s.discordId;
+    const ratingMap = RATINGS_CACHE.reduce((map, row) => {
+      const targetId = String(row.targetId ?? "").trim();
+      const reviewerId = String(row.reviewerId ?? "").trim();
+      if (targetId && reviewerId) {
+        map[`${targetId}|${reviewerId}`] = row;
+      }
+      return map;
+    }, {});
 
-    if (isYou) {
-      div.className += " no-click";
-      div.innerHTML = `
-        <img src="${s.avatarURL || ''}">
-        <div class="card-body">
-          <b>${s.name}</b>
-          <p style="opacity:0.6;">This is you</p>
-        </div>
-      `;
-    } else {
-      div.innerHTML = `
-        <img src="${s.avatarURL || ''}">
-        <div class="card-body">
-          <b>${s.name}</b>
-          <select data-id="${s.discordId}">
-            ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
-              .map(v => {
-                const normalized = v.toLowerCase();
-                return `<option value="${v}" ${selectedRating === normalized ? "selected" : ""}>${v}</option>`;
-              }).join("")}
-          </select>
-          <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
-        </div>
-        <div class="card-details"></div>
-      `;
-      
-      div.addEventListener("click", async (e) => {
-        if (e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+    STAFF_CACHE.forEach(s => {
+      if (!isTrue(s.isActive)) return;
+
+      const isYou = String(s.discordId) === String(userId);
+      const my = ratingMap[`${String(s.discordId).trim()}|${String(userId).trim()}`];
+      const selectedRating = my?.rating?.toString().trim().toLowerCase() || "n/a";
+
+      const div = document.createElement("div");
+      div.className = "card";
+      div.dataset.id = s.discordId;
+
+      if (isYou) {
+        div.className += " no-click";
+        div.innerHTML = `
+          <img src="${s.avatarURL || ''}">
+          <div class="card-body">
+            <b>${s.name}</b>
+            <p style="opacity:0.6;">This is you</p>
+          </div>
+        `;
+      } else {
+        div.innerHTML = `
+          <img src="${s.avatarURL || ''}">
+          <div class="card-body">
+            <b>${s.name}</b>
+            <select data-id="${s.discordId}">
+              ${["Excels","On Par","Meets Standards","Below Par","Needs Work","N/A"]
+                .map(v => {
+                  const normalized = v.toLowerCase();
+                  return `<option value="${v}" ${selectedRating === normalized ? "selected" : ""}>${v}</option>`;
+                }).join("")}
+            </select>
+            <textarea data-id="${s.discordId}">${my?.comment || ""}</textarea>
+          </div>
+          <div class="card-details"></div>
+        `;
         
-        if (EXPANDED_CARD === s.discordId) {
-          div.classList.remove("expanded");
-          EXPANDED_CARD = null;
-        } else {
-          if (EXPANDED_CARD) {
-            document.querySelector(`[data-id="${EXPANDED_CARD}"]`)?.classList.remove("expanded");
+        div.addEventListener("click", async (e) => {
+          if (e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+          
+          if (EXPANDED_CARD === s.discordId) {
+            div.classList.remove("expanded");
+            EXPANDED_CARD = null;
+          } else {
+            if (EXPANDED_CARD) {
+              document.querySelector(`[data-id="${EXPANDED_CARD}"]`)?.classList.remove("expanded");
+            }
+            div.classList.add("expanded");
+            EXPANDED_CARD = s.discordId;
+            await expandStaffCard(s.discordId, div);
           }
-          div.classList.add("expanded");
-          EXPANDED_CARD = s.discordId;
-          await expandStaffCard(s.discordId, div);
-        }
-      });
-    }
+        });
+      }
 
-    box.appendChild(div);
-  });
+      box.appendChild(div);
+    });
 
-  document.querySelectorAll("#reviewsBox select, #reviewsBox textarea")
-    .forEach(el => el.addEventListener("change", saveReviews));
+    document.querySelectorAll("#reviewsBox select, #reviewsBox textarea")
+      .forEach(el => el.addEventListener("change", saveReviews));
+  } catch (e) {
+    console.error("Review load failed", e);
+    showError("❌ Failed to load reviews");
+  }
 }
 
 async function expandStaffCard(targetId, cardEl) {
