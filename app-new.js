@@ -56,6 +56,61 @@ function showError(message) {
   }
 }
 
+function showPopup(title, html, actions = []) {
+  const overlay = getEl("popupOverlay");
+  if (!overlay) return;
+
+  getEl("popupTitle").textContent = title;
+  getEl("popupBody").innerHTML = html;
+  const actionsContainer = getEl("popupActions");
+  if (!actionsContainer) return;
+  actionsContainer.innerHTML = actions.map(action => `
+      <button class="overlay-button ${action.secondary ? "secondary" : ""}" id="${action.id}">${action.text}</button>
+    `).join("");
+
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+
+  getEl("popupClose")?.addEventListener("click", hidePopup);
+  overlay.onclick = event => {
+    if (event.target === overlay) hidePopup();
+  };
+
+  actions.forEach(action => {
+    if (!action.callback || !action.id) return;
+    getEl(action.id)?.addEventListener("click", action.callback);
+  });
+}
+
+function hidePopup() {
+  const overlay = getEl("popupOverlay");
+  if (!overlay) return;
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  getEl("popupBody").innerHTML = "";
+  getEl("popupActions").innerHTML = "";
+}
+
+function showDeniedOverlay(reason) {
+  let title = "Access Denied";
+  let message = "You do not have permission to access this portal.";
+
+  if (reason === "INVALID_LOGIN") {
+    title = "Invalid Login";
+    message = "Your login link is invalid. Please verify your ID and token or try a fresh link.";
+  } else if (reason === "SUSPENDED") {
+    title = "Account Suspended";
+    message = "Your account has been suspended, possibly due to staff status changes. Contact your administrator for help.";
+  } else if (reason === "MAINTENANCE") {
+    title = "Maintenance";
+    message = "The portal is temporarily unavailable due to maintenance. Please check back shortly.";
+  }
+
+  showPopup(title, `<p>${message}</p>`, [
+    { id: "popupCloseBtn", text: "Close", secondary: true, callback: hidePopup }
+  ]);
+}
+
 window.addEventListener("unhandledrejection", event => {
   console.error("Unhandled promise rejection:", event.reason);
   showError("❌ Unexpected error occurred while loading. Please refresh the page.");
@@ -93,7 +148,7 @@ async function fetchApi(action, data = {}) {
 
 async function verifyUser() {
   if (!userId || !token) {
-    showError("❌ Missing login credentials. Use a valid id and token in the URL.");
+    showDeniedOverlay("INVALID_LOGIN");
     return false;
   }
 
@@ -102,17 +157,22 @@ async function verifyUser() {
   const verifyRes = await fetchApi("verifyUser", { discordId: userId, token });
 
   if (!tokenRes || !verifyRes) {
-    showError("❌ Could not verify credentials. Please try again later.");
+    showDeniedOverlay("MAINTENANCE");
+    return false;
+  }
+
+  if (tokenRes?.error === "MAINTENANCE" || verifyRes?.error === "MAINTENANCE") {
+    showDeniedOverlay("MAINTENANCE");
     return false;
   }
 
   if (!isTrue(tokenRes.success) || !isTrue(verifyRes.valid)) {
-    showError("❌ Unauthorized. Please check your login link.");
+    showDeniedOverlay("INVALID_LOGIN");
     return false;
   }
 
   if (!isTrue(tokenRes.isActive)) {
-    showPage("revoked");
+    showDeniedOverlay("SUSPENDED");
     return false;
   }
 
@@ -231,7 +291,7 @@ function renderAdmin() {
   adminList.innerHTML = activeStaff.length ? activeStaff.map(member => {
     const count = state.ratings.filter(r => String(r.targetId).trim() === String(member.discordId).trim()).length;
     return `
-      <div class="card staff-card">
+      <div class="card staff-card" data-id="${member.discordId}">
         <img src="${member.avatarURL || ""}" alt="${member.name}">
         <div class="card-body">
           <b>${member.name}</b>
@@ -239,7 +299,90 @@ function renderAdmin() {
         </div>
       </div>`;
   }).join("") : `<div class="card"><p>No active staff found.</p></div>`;
+
+  adminList.querySelectorAll(".staff-card").forEach(card => {
+    card.addEventListener("click", () => {
+      const targetId = card.dataset.id;
+      if (targetId) openAdminStaffModal(targetId);
+    });
+  });
 }
+
+function getReviewerName(reviewerId) {
+  return state.staff.find(member => String(member.discordId).trim() === String(reviewerId).trim())?.name || reviewerId;
+}
+
+function getAdminTargetNotes(targetId) {
+  return state.notes.filter(note => String(note.targetId).trim() === String(targetId).trim());
+}
+
+function getAdminTargetRatings(targetId) {
+  return state.ratings.filter(rating => String(rating.targetId).trim() === String(targetId).trim());
+}
+
+async function openAdminStaffModal(targetId) {
+  const member = state.staff.find(s => String(s.discordId).trim() === String(targetId).trim());
+  if (!member) return;
+
+  const ratings = getAdminTargetRatings(targetId);
+  const notes = getAdminTargetNotes(targetId);
+  const myNote = notes.find(note => String(note.reviewerId).trim() === String(userId).trim());
+
+  const ratingsHtml = ratings.length ? ratings.map(r => `
+      <div class="review-card">
+        <b>${getReviewerName(r.reviewerId)}</b>
+        <small>Rating: ${r.rating}</small>
+        <p>${String(r.comment || "").trim() || "No comment."}</p>
+      </div>
+    `).join("") : "<p>No ratings yet.</p>";
+
+  const notesHtml = notes.length ? notes.map(note => `
+      <div class="note-item">
+        <small>${note.type === "Negative" ? "👎" : "👍"} ${getReviewerName(note.reviewerId)}</small>
+        <p>${String(note.note || "").trim() || "No note."}</p>
+      </div>
+    `).join("") : "<p>No notes yet.</p>";
+
+  showPopup(`Staff details for ${member.name}`, `
+    <div class="popup-section">
+      <h3>Ratings</h3>
+      ${ratingsHtml}
+    </div>
+    <div class="popup-section">
+      <h3>Notes</h3>
+      ${notesHtml}
+    </div>
+    <div class="popup-section">
+      <h3>Add or edit your note</h3>
+      <label for="popupNoteType">Note type</label>
+      <select id="popupNoteType">
+        <option value="Positive">Positive 👍</option>
+        <option value="Negative">Negative 👎</option>
+      </select>
+      <label for="popupNoteInput">Note text</label>
+      <textarea id="popupNoteInput" rows="4">${myNote?.note || ""}</textarea>
+    </div>
+  `, [
+    { id: "popupSaveNote", text: "Save Note", callback: async () => {
+      const noteType = getEl("popupNoteType")?.value || "Positive";
+      const noteText = getEl("popupNoteInput")?.value || "";
+
+      await fetchApi("saveNotes", {
+        month: state.month,
+        reviewerId: userId,
+        targetId,
+        type: noteType,
+        note: noteText.trim()
+      });
+
+      state.notes = Array.isArray(await fetchApi("getNotes", { month: state.month })) ? await fetchApi("getNotes", { month: state.month }) : state.notes;
+      hidePopup();
+      await loadAdmin();
+    } },
+    { id: "popupCloseBtn", text: "Cancel", secondary: true, callback: hidePopup }
+  ]);
+}
+
 
 async function loadReviews() {
   showPage("reviews");

@@ -189,6 +189,79 @@ button:hover {
   100% { transform: rotate(360deg); }
 }
 
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 15, 26, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-panel {
+  width: min(100%, 560px);
+  background: #0f172a;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+  position: relative;
+}
+
+.overlay-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.overlay-panel h2 {
+  margin: 0 0 18px;
+}
+
+.overlay-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.overlay-button {
+  background: #3b82f6;
+  border: none;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.overlay-button.secondary {
+  background: #1f2937;
+}
+
+.popup-section {
+  margin-bottom: 18px;
+}
+
+.popup-section h3 {
+  margin: 0 0 10px;
+}
+
+.popup-section .review-card,
+.popup-section .note-item {
+  margin-bottom: 12px;
+}
+
 .admin-controls {
   display: flex;
   flex-wrap: wrap;
