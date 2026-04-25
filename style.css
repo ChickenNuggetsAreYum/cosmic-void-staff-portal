@@ -350,6 +350,23 @@ button:hover {
   color: #94a3b8;
 }
 
+.note-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.note-list {
+  display: grid;
+  gap: 10px;
+}
+
+.save-note-button {
+  width: fit-content;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
 .note-item p {
   margin: 8px 0 0;
   white-space: pre-wrap;

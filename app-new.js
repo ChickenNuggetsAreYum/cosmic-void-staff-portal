@@ -238,6 +238,8 @@ function renderReviews() {
     const isYou = String(member.discordId).trim() === String(userId).trim();
     const currentRating = state.ratings.find(r => String(r.targetId).trim() === String(member.discordId).trim() && String(r.reviewerId).trim() === String(userId).trim());
     const selectedRating = currentRating?.rating ? currentRating.rating : "N/A";
+    const targetId = String(member.discordId).trim();
+    const myNotes = state.notes.filter(note => String(note.targetId).trim() === targetId && String(note.reviewerId).trim() === String(userId).trim());
 
     if (isYou) {
       return `
@@ -250,17 +252,38 @@ function renderReviews() {
         </div>`;
     }
 
+    const notesHtml = myNotes.length ? myNotes.map(note => `
+        <div class="note-item">
+          <small>${note.type === "Negative" ? "👎" : "👍"} ${note.type}</small>
+          <p>${String(note.note || "").trim() || "No note content."}</p>
+        </div>
+      `).join("") : `
+        <div class="note-item"><p>No notes yet.</p></div>
+      `;
+
     return `
-      <div class="card" data-id="${member.discordId}">
+      <div class="card" data-id="${targetId}">
         <img src="${member.avatarURL || ""}" alt="${member.name}">
         <div class="card-body">
           <b>${member.name}</b>
-          <select data-id="${member.discordId}">
+          <select data-id="${targetId}">
             ${["Excels", "On Par", "Meets Standards", "Below Par", "Needs Work", "N/A"].map(option => `
               <option value="${option}" ${option === selectedRating ? "selected" : ""}>${option}</option>
             `).join("")}
           </select>
-          <textarea data-id="${member.discordId}" placeholder="Leave a comment...">${currentRating?.comment || ""}</textarea>
+          <textarea data-id="${targetId}" placeholder="Leave a comment...">${currentRating?.comment || ""}</textarea>
+          <div class="note-summary">
+            <label>My notes</label>
+            <div class="note-list">${notesHtml}</div>
+            <label for="noteType-${targetId}">New note type</label>
+            <select id="noteType-${targetId}" data-note-id="${targetId}">
+              <option value="Positive">Positive 👍</option>
+              <option value="Negative">Negative 👎</option>
+            </select>
+            <label for="noteInput-${targetId}">Add a note</label>
+            <textarea id="noteInput-${targetId}" data-note-id="${targetId}" rows="3" placeholder="Add a note about this staff member..."></textarea>
+            <button class="save-note-button" data-note-id="${targetId}" type="button">Add note</button>
+          </div>
         </div>
       </div>`;
   }).join("");
@@ -268,6 +291,48 @@ function renderReviews() {
   document.querySelectorAll("#reviewsBox select[data-id], #reviewsBox textarea[data-id]").forEach(element => {
     element.addEventListener("change", saveReviews);
   });
+
+  document.querySelectorAll(".save-note-button").forEach(button => {
+    button.addEventListener("click", async () => {
+      const targetId = button.dataset.noteId;
+      if (targetId) await saveNoteForTarget(targetId);
+    });
+  });
+}
+
+async function saveNoteForTarget(targetId) {
+  const noteTypeElement = document.querySelector(`#reviewsBox select[data-note-id='${targetId}']`);
+  const noteTextElement = document.querySelector(`#reviewsBox textarea[data-note-id='${targetId}']`);
+  const noteType = noteTypeElement?.value || "Positive";
+  const noteText = noteTextElement?.value || "";
+
+  if (!noteText.trim()) {
+    showStatus("Please enter a note before saving.");
+    return;
+  }
+
+  showStatus("Saving note...");
+  showSpinner();
+  const result = await fetchApi("saveNotes", {
+    month: state.month,
+    reviewerId: userId,
+    targetId,
+    type: noteType,
+    note: noteText.trim()
+  });
+
+  if (!result) {
+    showError("❌ Failed to save note.");
+    hideSpinner();
+    return;
+  }
+
+  const notes = await fetchApi("getNotes", { month: state.month });
+  state.notes = Array.isArray(notes) ? notes : state.notes;
+  if (noteTextElement) noteTextElement.value = "";
+  renderReviews();
+  hideSpinner();
+  showStatus("Note saved.");
 }
 
 function renderAdmin() {
@@ -277,6 +342,9 @@ function renderAdmin() {
 
   const activeStaff = state.staff.filter(member => isTrue(member.isActive));
   const ratingCount = state.ratings.length;
+  const noteCount = state.notes.length;
+  const positiveNotes = state.notes.filter(note => note.type === "Positive").length;
+  const negativeNotes = state.notes.filter(note => note.type === "Negative").length;
 
   statsBox.innerHTML = `
     <div class="stat-card">
@@ -286,16 +354,31 @@ function renderAdmin() {
     <div class="stat-card">
       <b>Total ratings</b>
       <span>${ratingCount}</span>
+    </div>
+    <div class="stat-card">
+      <b>Total notes</b>
+      <span>${noteCount}</span>
+    </div>
+    <div class="stat-card">
+      <b>Positive notes</b>
+      <span>${positiveNotes}</span>
+    </div>
+    <div class="stat-card">
+      <b>Negative notes</b>
+      <span>${negativeNotes}</span>
     </div>`;
 
   adminList.innerHTML = activeStaff.length ? activeStaff.map(member => {
-    const count = state.ratings.filter(r => String(r.targetId).trim() === String(member.discordId).trim()).length;
+    const targetId = String(member.discordId).trim();
+    const ratingCountForMember = state.ratings.filter(r => String(r.targetId).trim() === targetId).length;
+    const noteCountForMember = state.notes.filter(n => String(n.targetId).trim() === targetId).length;
+
     return `
-      <div class="card staff-card" data-id="${member.discordId}">
-        <img src="${member.avatarURL || ""}" alt="${member.name}">
+      <div class="staff-card" data-id="${targetId}">
         <div class="card-body">
           <b>${member.name}</b>
-          <p>Ratings: ${count}</p>
+          <p>Ratings: ${ratingCountForMember}</p>
+          <p>Notes: ${noteCountForMember}</p>
         </div>
       </div>`;
   }).join("") : `<div class="card"><p>No active staff found.</p></div>`;
@@ -326,7 +409,6 @@ async function openAdminStaffModal(targetId) {
 
   const ratings = getAdminTargetRatings(targetId);
   const notes = getAdminTargetNotes(targetId);
-  const myNote = notes.find(note => String(note.reviewerId).trim() === String(userId).trim());
 
   const ratingsHtml = ratings.length ? ratings.map(r => `
       <div class="review-card">
@@ -336,6 +418,8 @@ async function openAdminStaffModal(targetId) {
       </div>
     `).join("") : "<p>No ratings yet.</p>";
 
+  const positiveCount = notes.filter(note => note.type === "Positive").length;
+  const negativeCount = notes.filter(note => note.type === "Negative").length;
   const notesHtml = notes.length ? notes.map(note => `
       <div class="note-item">
         <small>${note.type === "Negative" ? "👎" : "👍"} ${getReviewerName(note.reviewerId)}</small>
@@ -349,37 +433,12 @@ async function openAdminStaffModal(targetId) {
       ${ratingsHtml}
     </div>
     <div class="popup-section">
-      <h3>Notes</h3>
+      <h3>Notes (${notes.length})</h3>
+      <p>${positiveCount} positive • ${negativeCount} negative</p>
       ${notesHtml}
     </div>
-    <div class="popup-section">
-      <h3>Add or edit your note</h3>
-      <label for="popupNoteType">Note type</label>
-      <select id="popupNoteType">
-        <option value="Positive">Positive 👍</option>
-        <option value="Negative">Negative 👎</option>
-      </select>
-      <label for="popupNoteInput">Note text</label>
-      <textarea id="popupNoteInput" rows="4">${myNote?.note || ""}</textarea>
-    </div>
   `, [
-    { id: "popupSaveNote", text: "Save Note", callback: async () => {
-      const noteType = getEl("popupNoteType")?.value || "Positive";
-      const noteText = getEl("popupNoteInput")?.value || "";
-
-      await fetchApi("saveNotes", {
-        month: state.month,
-        reviewerId: userId,
-        targetId,
-        type: noteType,
-        note: noteText.trim()
-      });
-
-      state.notes = Array.isArray(await fetchApi("getNotes", { month: state.month })) ? await fetchApi("getNotes", { month: state.month }) : state.notes;
-      hidePopup();
-      await loadAdmin();
-    } },
-    { id: "popupCloseBtn", text: "Cancel", secondary: true, callback: hidePopup }
+    { id: "popupCloseBtn", text: "Close", secondary: true, callback: hidePopup }
   ]);
 }
 
