@@ -49,24 +49,24 @@ async function verify() {
     token
   });
 
-  if (!tokenRes?.success) {
+  if (!isTrue(tokenRes?.success)) {
     document.body.innerHTML = "❌ Unauthorized";
     throw new Error("Unauthorized");
   }
 
-  if (tokenRes.isActive !== true) {
+  if (!isTrue(tokenRes.isActive)) {
     setActivePage("revoked");
     return false;
   }
 
-  if (!verifyRes?.valid) {
+  if (!isTrue(verifyRes?.valid)) {
     document.body.innerHTML = "❌ Unauthorized";
     throw new Error("Unauthorized");
   }
 
   USER = {
     ...tokenRes,
-    isWebAdmin: verifyRes.isWebAdmin
+    isWebAdmin: isTrue(verifyRes.isWebAdmin)
   };
   return true;
 }
