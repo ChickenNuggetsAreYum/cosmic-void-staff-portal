@@ -37,6 +37,11 @@ window.addEventListener("unhandledrejection", event => {
   showError("❌ Unexpected error occurred while loading. Please refresh the page.");
 });
 
+window.addEventListener("error", (event) => {
+  console.error("Unhandled error:", event.error || event.message);
+  showError("❌ Unexpected error occurred while loading. Please refresh the page.");
+});
+
 // ---------------- CACHE ----------------
 
 let STAFF_CACHE = null;
