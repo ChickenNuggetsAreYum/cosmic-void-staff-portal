@@ -17,6 +17,11 @@ function hideSpinner() {
   if (spinner) spinner.style.display = "none";
 }
 
+function showSpinner() {
+  const spinner = document.getElementById("loadingSpinner");
+  if (spinner) spinner.style.display = "block";
+}
+
 function showError(message) {
   hideSpinner();
   const box = document.getElementById("reviewsBox");
@@ -26,6 +31,11 @@ function showError(message) {
     document.body.innerHTML = message;
   }
 }
+
+window.addEventListener("unhandledrejection", event => {
+  console.error("Unhandled promise rejection:", event.reason);
+  showError("❌ Unexpected error occurred while loading. Please refresh the page.");
+});
 
 // ---------------- CACHE ----------------
 
@@ -167,23 +177,24 @@ async function loadReviews() {
   const spinner = document.getElementById("loadingSpinner");
   if (!box) return;
 
+  showSpinner();
   const currentMonth = month();
   if (RATINGS_MONTH !== currentMonth) {
     RATINGS_CACHE = null;
     RATINGS_MONTH = currentMonth;
   }
 
-  // fetch once only
-  if (!STAFF_CACHE || RATINGS_MONTH !== currentMonth) {
-    STAFF_CACHE = await post("getStaff");
-  }
-
-  if (!RATINGS_CACHE || RATINGS_MONTH !== currentMonth) {
-    RATINGS_CACHE = await post("getRatings", { month: currentMonth });
-    RATINGS_MONTH = currentMonth;
-  }
-
   try {
+    // fetch once only
+    if (!STAFF_CACHE || RATINGS_MONTH !== currentMonth) {
+      STAFF_CACHE = await post("getStaff");
+    }
+
+    if (!RATINGS_CACHE || RATINGS_MONTH !== currentMonth) {
+      RATINGS_CACHE = await post("getRatings", { month: currentMonth });
+      RATINGS_MONTH = currentMonth;
+    }
+
     if (!Array.isArray(STAFF_CACHE) || !Array.isArray(RATINGS_CACHE)) {
       showError("❌ Failed to load data");
       return;
@@ -266,6 +277,8 @@ async function loadReviews() {
   } catch (e) {
     console.error("Review load failed", e);
     showError("❌ Failed to load reviews");
+  } finally {
+    hideSpinner();
   }
 }
 
